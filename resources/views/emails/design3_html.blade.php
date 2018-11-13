@@ -26,9 +26,9 @@
                                         {{ strtoupper(trans('texts.valid_until')) }} {{ $account->formatDate($invoice->due_date) }}
                                     @else
                                         @if ($account->hasCustomLabel('due_date'))
-                                            {{ $account->getLabel('due_date') }} {{ $account->formatDate($invoice->partial_due_date ?: $invoice->due_date) }}
+                                            {{ $account->getLabel('due_date') }} {{ $account->formatDate($invoice->due_date) }}
                                         @else
-                                            {{ utrans('texts.due_by', ['date' => $account->formatDate($invoice->partial_due_date ?: $invoice->due_date)]) }}
+                                            {{ strtoupper(trans('texts.due_by', ['date' => $account->formatDate($invoice->due_date)])) }}
                                         @endif
                                     @endif
                                 </span><br />
@@ -40,14 +40,12 @@
                     </td>
                     <td style="border-collapse: collapse; vertical-align: middle; line-height: 16px;" valign="middle">
                         <p style="margin: 0; padding: 0;">
-                            @if (! isset($isRefund) || ! $isRefund)
-                                <span style="font-size: 12px; color: #8f8d8e;">
-                                    {{ strtoupper(trans('texts.' . $invoice->present()->balanceDueLabel)) }}:
-                                </span><br />
-                                <span class="total" style="font-size: 27px; color: #FFFFFF; margin-top: 5px;display: block;">
-                                    {{ $account->formatMoney($invoice->getRequestedAmount(), $client) }}
-                                </span>
-                            @endif
+                            <span style="font-size: 12px; color: #8f8d8e;">
+                                {{ strtoupper(trans('texts.' . $invoice->present()->balanceDueLabel)) }}:
+                            </span><br />
+                            <span class="total" style="font-size: 27px; color: #FFFFFF; margin-top: 5px;display: block;">
+                                {{ $account->formatMoney($invoice->getRequestedAmount(), $client) }}
+                            </span>
                         </p>
                     </td>
                 </tr>
@@ -63,14 +61,17 @@
 
 @section('footer')
     <p style="color: #A7A6A6; font-size: 13px; line-height: 18px; margin: 0 0 7px; padding: 0;">
-        @if (! $account->isPaid())
-            {!! trans('texts.ninja_email_footer', ['site' => link_to(NINJA_WEB_URL . '?utm_source=email_footer', APP_NAME)]) !!}
-        @else
-            {{ $account->present()->address }}
+        {{ $account->address1 }}
+        @if ($account->address1 && $account->getCityState())
+            -
+        @endif
+        {{ $account->getCityState() }}
+        @if ($account->address1 || $account->getCityState())
             <br />
-            @if ($account->website)
-                <strong><a href="{{ $account->present()->website }}" style="color: #A7A6A6; text-decoration: none; font-weight: bold; font-size: 10px;">{{ $account->website }}</a></strong>
-            @endif
+        @endif
+
+        @if ($account->website)
+            <strong><a href="{{ $account->present()->website }}" style="color: #A7A6A6; text-decoration: none; font-weight: bold; font-size: 10px;">{{ $account->website }}</a></strong>
         @endif
     </p>
 @stop

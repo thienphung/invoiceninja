@@ -5,7 +5,7 @@
 
     @include('money_script')
 
-	<script src="{{ asset('js/Chart.min.js') }}" type="text/javascript"></script>
+	<script src="{!! asset('js/Chart.min.js') !!}" type="text/javascript"></script>
     <script src="{{ asset('js/daterangepicker.min.js') }}" type="text/javascript"></script>
     <link href="{{ asset('css/daterangepicker.css') }}" rel="stylesheet" type="text/css"/>
 
@@ -15,7 +15,7 @@
 
 <script type="text/javascript">
 
-    @if (Auth::user()->hasPermission('admin'))
+    @if (Auth::user()->hasPermission('view_all'))
         function loadChart(data) {
             var ctx = document.getElementById('chart-canvas').getContext('2d');
             if (window.myChart) {
@@ -138,10 +138,8 @@
 
             $('#reportrange').daterangepicker({
                 locale: {
-					format: "{{ $account->getMomentDateFormat() }}",
+                    format: "{{ $account->getMomentDateFormat() }}",
 					customRangeLabel: "{{ trans('texts.custom_range') }}",
-					applyLabel: "{{ trans('texts.apply') }}",
-					cancelLabel: "{{ trans('texts.cancel') }}",
                 },
 				startDate: chartStartDate,
                 endDate: chartEndDate,
@@ -170,8 +168,8 @@
             });
 
             function loadData() {
-                var includeExpenses = "{{ $showExpenses ? 'true' : 'false' }}";
-                var url = '{{ url('/dashboard_chart_data') }}/' + chartGroupBy + '/' + chartStartDate.format('YYYY-MM-DD') + '/' + chartEndDate.format('YYYY-MM-DD') + '/' + chartCurrencyId + '/' + includeExpenses;
+                var includeExpenses = "{{ count($expenses) ? 'true' : 'false' }}";
+                var url = "{!! url('/dashboard_chart_data') !!}/" + chartGroupBy + '/' + chartStartDate.format('YYYY-MM-DD') + '/' + chartEndDate.format('YYYY-MM-DD') + '/' + chartCurrencyId + '/' + includeExpenses;
                 $.get(url, function(response) {
                     response = JSON.parse(response);
                     loadChart(response.data);
@@ -219,7 +217,7 @@
     @else
         <div class="col-md-10">
     @endif
-        @if (Auth::user()->hasPermission('admin'))
+        @if (Auth::user()->hasPermission('view_all'))
         <div class="pull-right">
             @if (count($currencies) > 1)
             <div id="currency-btn-group" class="btn-group" role="group" style="border: 1px solid #ccc;">
@@ -290,7 +288,7 @@
         <div class="panel panel-default">
             <div class="panel-body expenses-panel">
                 <div style="overflow:hidden">
-                    @if ($showExpenses)
+                    @if (count($expenses))
                         <div class="{{ $headerClass }}">
                             {{ trans('texts.total_expenses') }}
                         </div>
@@ -370,7 +368,7 @@
     </div>
 </div>
 
-@if (Auth::user()->hasPermission('admin'))
+@if (Auth::user()->hasPermission('view_all'))
 <div class="row">
     <div class="col-md-12">
         <div id="progress-div" class="progress">
@@ -386,7 +384,7 @@
 <div class="row">
     <div class="col-md-6">
         <div class="panel panel-default dashboard" style="height:320px">
-            <div class="panel-heading">
+            <div class="panel-heading" style="background-color:#286090 !important">
                 <h3 class="panel-title in-bold-white">
                     <i class="glyphicon glyphicon-exclamation-sign"></i> {{ trans('texts.activity') }}
                     @if ($invoicesSent)
@@ -415,7 +413,7 @@
         <div class="panel panel-default dashboard" style="height:320px;">
             <div class="panel-heading" style="margin:0; background-color: #f5f5f5 !important;">
                 <h3 class="panel-title" style="color: black !important">
-                    @if ($showExpenses && count($averageInvoice))
+                    @if (count($expenses) && count($averageInvoice))
                         <div class="pull-right" style="font-size:14px;padding-top:4px;font-weight:bold">
                             @foreach ($averageInvoice as $item)
                                 <span class="currency currency_{{ $item->currency_id ?: $account->getCurrencyId() }}" style="display:none">
@@ -441,7 +439,7 @@
                         @foreach ($payments as $payment)
                         <tr>
                             <td>{!! \App\Models\Invoice::calcLink($payment) !!}</td>
-                            @can('view', [ENTITY_CLIENT, $payment])
+                            @can('viewByOwner', [ENTITY_CLIENT, $payment->client_user_id])
                                 <td>{!! link_to('/clients/'.$payment->client_public_id, trim($payment->client_name) ?: (trim($payment->first_name . ' ' . $payment->last_name) ?: $payment->email)) !!}</td>
                             @else
                                 <td>{{ trim($payment->client_name) ?: (trim($payment->first_name . ' ' . $payment->last_name) ?: $payment->email) }}</td>
@@ -478,7 +476,7 @@
                             @if ($invoice->invoice_type_id == INVOICE_TYPE_STANDARD)
                                 <tr>
                                     <td>{!! \App\Models\Invoice::calcLink($invoice) !!}</td>
-                                    @can('view', [ENTITY_CLIENT, $invoice])
+                                    @can('viewByOwner', [ENTITY_CLIENT, $invoice->client_user_id])
                                         <td>{!! link_to('/clients/'.$invoice->client_public_id, trim($invoice->client_name) ?: (trim($invoice->first_name . ' ' . $invoice->last_name) ?: $invoice->email)) !!}</td>
                                     @else
                                         <td>{{ trim($invoice->client_name) ?: (trim($invoice->first_name . ' ' . $invoice->last_name) ?: $invoice->email) }}</td>
@@ -513,7 +511,7 @@
                             @if ($invoice->invoice_type_id == INVOICE_TYPE_STANDARD)
                                 <tr>
                                     <td>{!! \App\Models\Invoice::calcLink($invoice) !!}</td>
-                                    @can('view', [ENTITY_CLIENT, $invoice])
+                                    @can('viewByOwner', [ENTITY_CLIENT, $invoice->client_user_id])
                                         <td>{!! link_to('/clients/'.$invoice->client_public_id, trim($invoice->client_name) ?: (trim($invoice->first_name . ' ' . $invoice->last_name) ?: $invoice->email)) !!}</td>
                                     @else
                                         <td>{{ trim($invoice->client_name) ?: (trim($invoice->first_name . ' ' . $invoice->last_name) ?: $invoice->email) }}</td>
@@ -596,5 +594,13 @@
         </div>
     </div>
 @endif
+
+<script type="text/javascript">
+    $(function() {
+        $('.normalDropDown:not(.dropdown-toggle)').click(function() {
+            window.location = '{{ URL::to('invoices/create') }}';
+        });
+    });
+</script>
 
 @stop

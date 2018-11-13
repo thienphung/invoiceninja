@@ -20,7 +20,11 @@ For example:
 
     php artisan module:install invoiceninja/sprockets --type=github
 
-.. TIP:: One a module is installed it can enabled/disabled on Settings > Account Management
+You can check the current module status with:
+
+.. code-block:: php
+
+    php artisan module:list
 
 
 Create Module
@@ -32,31 +36,29 @@ Run the following command to create a CRUD module:
 
     php artisan ninja:make-module <module> <fields>
 
-For example:
-
 .. code-block:: php
 
     php artisan ninja:make-module Inventory 'name:string,description:text'
 
-To run the database migration use:
+To edit the migration before it's run add ``--migrate=false``
+
+.. code-block:: php
+
+    php artisan ninja:make-module <module> <fields> --migrate=false
+
+After making adjustments to the migration file you can run:
 
 .. code-block:: php
 
     php artisan module:migrate <module>
 
 
-.. Tip:: You can specify the module icon by setting a value from http://fontawesome.io/icons/ for "icon" in module.json.
-
-There are two types of modules: you can either create a standard module which displays a list of a new entity type or you can create a blank module which adds functionality. For example, a custom integration with a third-party app. If you do not want an entry in the application navigation sidebar, add "no-sidebar": 1 to the custom module's module.json. 
-
-If you're looking for a module to work on you can see suggested issues `listed here <https://github.com/invoiceninja/invoiceninja/issues?q=is%3Aissue+is%3Aopen+label%3A%22custom+module%22>`_.
-
-.. NOTE:: Our module implemention is currenty being actively worked on, you can join the discussion on our Slack group: http://slack.invoiceninja.com/
+.. Tip:: You can specify the module icon by setting a value from http://fontawesome.io/icons/ for "icon" in modules.json.
 
 Share Module
 """"""""""""
 
-To share your module create a new project on GitHub and then run the following code:
+To share your module create a new project on GitHub and then commit the code:
 
 .. code-block:: php
 

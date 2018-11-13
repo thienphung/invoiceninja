@@ -11,11 +11,9 @@ class AddInclusiveTaxes extends Migration
      */
     public function up()
     {
-        if (! Schema::hasColumn('tax_rates', 'is_inclusive')) {
-            Schema::table('tax_rates', function ($table) {
-                $table->boolean('is_inclusive')->default(false);
-            });
-        }
+        Schema::table('tax_rates', function ($table) {
+            $table->boolean('is_inclusive')->default(false);
+        });
 
         Schema::table('companies', function ($table) {
             $table->enum('bluevine_status', ['ignored', 'signed_up'])->nullable();

@@ -4,7 +4,6 @@ namespace App\Models\Traits;
 
 use App\Constants\Domain;
 use Utils;
-use HTMLUtils;
 
 /**
  * Class SendsEmails.
@@ -22,12 +21,7 @@ trait SendsEmails
             $entityType = 'reminder';
         }
 
-        return trans("texts.{$entityType}_subject", [
-            'invoice' => '$invoice',
-            'account' => '$account',
-            'quote' => '$quote',
-            'number' => '$number',
-        ]);
+        return trans("texts.{$entityType}_subject", ['invoice' => '$invoice', 'account' => '$account', 'quote' => '$quote']);
     }
 
     /**
@@ -42,8 +36,7 @@ trait SendsEmails
             $value = $this->account_email_settings->$field;
 
             if ($value) {
-                $value = preg_replace("/\r\n|\r|\n/", ' ', $value);
-                return HTMLUtils::sanitizeHTML($value);
+                return preg_replace("/\r\n|\r|\n/", ' ', $value);
             }
         }
 
@@ -62,14 +55,14 @@ trait SendsEmails
             $entityType = ENTITY_INVOICE;
         }
 
-        $template = '<div>$client,</div><br />';
+        $template = '<div>$client,</div><br>';
 
         if ($this->hasFeature(FEATURE_CUSTOM_EMAILS) && $this->email_design_id != EMAIL_DESIGN_PLAIN) {
-            $template .= '<div>' . trans("texts.{$entityType}_message_button", ['amount' => '$amount']) . '</div><br />' .
-                         '<div style="text-align:center;">$viewButton</div><br />';
+            $template .= '<div>' . trans("texts.{$entityType}_message_button", ['amount' => '$amount']) . '</div><br>' .
+                         '<div style="text-align: center;">$viewButton</div><br>';
         } else {
-            $template .= '<div>' . trans("texts.{$entityType}_message", ['amount' => '$amount']) . '</div><br />' .
-                         '<div>$viewLink</div><br />';
+            $template .= '<div>' . trans("texts.{$entityType}_message", ['amount' => '$amount']) . '</div><br>' .
+                         '<div>$viewLink</div><br>';
         }
 
         if ($message) {
@@ -101,9 +94,7 @@ trait SendsEmails
         $template = preg_replace("/\r\n|\r|\n/", ' ', $template);
 
         // <br/> is causing page breaks with the email designs
-        $template = str_replace('/>', ' />', $template);
-
-        return HTMLUtils::sanitizeHTML($template);
+        return str_replace('/>', ' />', $template);
     }
 
     /**
@@ -134,9 +125,9 @@ trait SendsEmails
      *
      * @return bool
      */
-    public function getReminderDate($reminder, $filterEnabled = true)
+    public function getReminderDate($reminder)
     {
-        if ($filterEnabled && ! $this->{"enable_reminder{$reminder}"}) {
+        if (! $this->{"enable_reminder{$reminder}"}) {
             return false;
         }
 
@@ -151,19 +142,13 @@ trait SendsEmails
      *
      * @return bool|string
      */
-    public function getInvoiceReminder($invoice, $filterEnabled = true)
+    public function getInvoiceReminder($invoice)
     {
         for ($i = 1; $i <= 3; $i++) {
-            if ($date = $this->getReminderDate($i, $filterEnabled)) {
-                if ($this->{"field_reminder{$i}"} == REMINDER_FIELD_DUE_DATE) {
-                    if (($invoice->partial && $invoice->partial_due_date == $date)
-                        || $invoice->due_date == $date) {
-                        return "reminder{$i}";
-                    }
-                } else {
-                    if ($invoice->invoice_date == $date) {
-                        return "reminder{$i}";
-                    }
+            if ($date = $this->getReminderDate($i)) {
+                $field = $this->{"field_reminder{$i}"} == REMINDER_FIELD_DUE_DATE ? 'due_date' : 'invoice_date';
+                if ($invoice->$field == $date) {
+                    return "reminder{$i}";
                 }
             }
         }
@@ -203,14 +188,5 @@ trait SendsEmails
         }
 
         return Domain::getEmailFromId($this->domain_id);
-    }
-
-    public function getDailyEmailLimit()
-    {
-        $limit = MAX_EMAILS_SENT_PER_DAY;
-
-        $limit += $this->created_at->diffInMonths() * 100;
-
-        return min($limit, 5000);
     }
 }

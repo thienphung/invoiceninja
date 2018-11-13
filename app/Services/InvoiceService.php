@@ -9,7 +9,6 @@ use App\Models\Invoice;
 use App\Ninja\Datatables\InvoiceDatatable;
 use App\Ninja\Repositories\ClientRepository;
 use App\Ninja\Repositories\InvoiceRepository;
-use App\Jobs\DownloadInvoices;
 use Auth;
 use Utils;
 
@@ -56,23 +55,6 @@ class InvoiceService extends BaseService
     }
 
     /**
-     * @param $ids
-     * @param $action
-     *
-     * @return int
-     */
-    public function bulk($ids, $action)
-    {
-        if ($action == 'download') {
-            $invoices = $this->getRepo()->findByPublicIdsWithTrashed($ids);
-            dispatch(new DownloadInvoices(Auth::user(), $invoices));
-            return count($invoices);
-        } else {
-            return parent::bulk($ids, $action);
-        }
-    }
-
-    /**
      * @param array        $data
      * @param Invoice|null $invoice
      *
@@ -84,7 +66,7 @@ class InvoiceService extends BaseService
             $canSaveClient = false;
             $canViewClient = false;
             $clientPublicId = array_get($data, 'client.public_id') ?: array_get($data, 'client.id');
-            if (empty($clientPublicId) || intval($clientPublicId) < 0) {
+            if (empty($clientPublicId) || $clientPublicId == '-1') {
                 $canSaveClient = Auth::user()->can('create', ENTITY_CLIENT);
             } else {
                 $client = Client::scope($clientPublicId)->first();
@@ -110,14 +92,7 @@ class InvoiceService extends BaseService
      */
     public function convertQuote($quote)
     {
-        $account = $quote->account;
-        $invoice = $this->invoiceRepo->cloneInvoice($quote, $quote->id);
-
-        if ($account->auto_archive_quote) {
-            $this->invoiceRepo->archive($quote);
-        }
-
-        return $invoice;
+        return $this->invoiceRepo->cloneInvoice($quote, $quote->id);
     }
 
     /**
@@ -148,10 +123,6 @@ class InvoiceService extends BaseService
             $quote->markApproved();
         }
 
-        if ($account->auto_archive_quote) {
-            $this->invoiceRepo->archive($quote);
-        }
-
         return $invitation->invitation_key;
     }
 
@@ -163,7 +134,7 @@ class InvoiceService extends BaseService
         $query = $this->invoiceRepo->getInvoices($accountId, $clientPublicId, $entityType, $search)
                     ->where('invoices.invoice_type_id', '=', $entityType == ENTITY_QUOTE ? INVOICE_TYPE_QUOTE : INVOICE_TYPE_STANDARD);
 
-        if (! Utils::hasPermission('view_' . $entityType)) {
+        if (! Utils::hasPermission('view_all')) {
             $query->where('invoices.user_id', '=', Auth::user()->id);
         }
 

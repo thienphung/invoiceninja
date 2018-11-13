@@ -13,11 +13,6 @@ class TaxRateRepository extends BaseRepository
         return 'App\Models\TaxRate';
     }
 
-    public function all()
-    {
-        return TaxRate::scope()->get();
-    }
-
     public function find($accountId)
     {
         return DB::table('tax_rates')

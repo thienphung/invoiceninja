@@ -2,18 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\ExportReportResults;
-use App\Jobs\LoadPostmarkStats;
-use App\Jobs\RunReport;
 use App\Models\Account;
-use App\Models\ScheduledReport;
 use Auth;
 use Input;
+use Str;
 use Utils;
 use View;
-use Carbon;
-use Validator;
-
 
 /**
  * Class ReportController.
@@ -30,7 +24,7 @@ class ReportController extends BaseController
 
         if (Auth::user()->account->hasFeature(FEATURE_REPORTS)) {
             $account = Account::where('id', '=', Auth::user()->account->id)
-                            ->with(['clients.invoices.invoice_items', 'clients.contacts', 'clients.currency'])
+                            ->with(['clients.invoices.invoice_items', 'clients.contacts'])
                             ->first();
             $account = $account->hideFieldsForViz();
             $clients = $account->clients;
@@ -54,12 +48,11 @@ class ReportController extends BaseController
      */
     public function showReports()
     {
-        if (! Auth::user()->hasPermission('view_reports')) {
+        if (! Auth::user()->hasPermission('view_all')) {
             return redirect('/');
         }
 
         $action = Input::get('action');
-        $format = Input::get('format');
 
         if (Input::get('report_type')) {
             $reportType = Input::get('report_type');
@@ -69,7 +62,7 @@ class ReportController extends BaseController
         } else {
             $reportType = ENTITY_INVOICE;
             $dateField = FILTER_INVOICE_DATE;
-            $startDate = Utils::today(false)->modify('-1 month');
+            $startDate = Utils::today(false)->modify('-3 month');
             $endDate = Utils::today(false);
         }
 
@@ -77,8 +70,6 @@ class ReportController extends BaseController
             'activity',
             'aging',
             'client',
-            'credit',
-            'document',
             'expense',
             'invoice',
             'payment',
@@ -100,31 +91,20 @@ class ReportController extends BaseController
 
         if (Auth::user()->account->hasFeature(FEATURE_REPORTS)) {
             $isExport = $action == 'export';
-            $config = [
+            $reportClass = '\\App\\Ninja\\Reports\\' . Str::studly($reportType) . 'Report';
+            $options = [
                 'date_field' => $dateField,
-                'status_ids' => request()->status_ids,
-                'group' => request()->group,
-                'subgroup' => request()->subgroup,
-                'document_filter' => request()->document_filter,
-                'currency_type' => request()->currency_type,
-                'export_format' => $format,
-                'start_date' => $params['startDate'],
-                'end_date' => $params['endDate'],
+                'invoice_status' => request()->invoice_status,
+                'group_dates_by' => request()->group_dates_by,
             ];
-            $report = dispatch(new RunReport(auth()->user(), $reportType, $config, $isExport));
-            $params = array_merge($params, $report->exportParams);
-            switch ($action) {
-                case 'export':
-                    return dispatch(new ExportReportResults(auth()->user(), $format, $reportType, $params))->export($format);
-                    break;
-                case 'schedule':
-                    self::schedule($params, $config);
-                    return redirect('/reports');
-                    break;
-                case 'cancel_schedule':
-                    self::cancelSchdule();
-                    return redirect('/reports');
-                    break;
+            $report = new $reportClass($startDate, $endDate, $isExport, $options);
+            if (Input::get('report_type')) {
+                $report->run();
+            }
+            $params['report'] = $report;
+            $params = array_merge($params, $report->results());
+            if ($isExport) {
+                self::export($reportType, $params['displayData'], $params['columns'], $params['reportTotals']);
             }
         } else {
             $params['columns'] = [];
@@ -133,65 +113,53 @@ class ReportController extends BaseController
             $params['report'] = false;
         }
 
-        $params['scheduledReports'] = ScheduledReport::scope()->whereUserId(auth()->user()->id)->get();
-
-        return View::make('reports.report_builder', $params);
+        return View::make('reports.chart_builder', $params);
     }
 
-    private function schedule($params, $options)
+    /**
+     * @param $reportType
+     * @param $data
+     * @param $columns
+     * @param $totals
+     */
+    private function export($reportType, $data, $columns, $totals)
     {
-        $validator = Validator::make(request()->all(), [
-            'frequency' => 'required|in:daily,weekly,biweekly,monthly',
-            'send_date' => 'required',
-        ]);
-
-        if ($validator->fails()) {
-            session()->now('message', trans('texts.scheduled_report_error'));
-        } else {
-            $options['report_type'] = $params['reportType'];
-            $options['range'] = request('range');
-            $options['start_date_offset'] = $options['range'] ? '' : Carbon::parse($params['startDate'])->diffInDays(null, false); // null,false to get the relative/non-absolute diff
-            $options['end_date_offset'] = $options['range'] ? '' : Carbon::parse($params['endDate'])->diffInDays(null, false);
-
-            unset($options['start_date']);
-            unset($options['end_date']);
-            unset($options['group']);
-            unset($options['subgroup']);
-
-            $schedule = ScheduledReport::createNew();
-            $schedule->config = json_encode($options);
-            $schedule->frequency = request('frequency');
-            $schedule->send_date = Utils::toSqlDate(request('send_date'));
-            $schedule->ip = request()->getClientIp();
-            $schedule->save();
-
-            session()->flash('message', trans('texts.created_scheduled_report'));
+        if (! Auth::user()->hasPermission('view_all')) {
+            exit;
         }
-    }
 
-    private function cancelSchdule()
-    {
-        ScheduledReport::scope()
-            ->whereUserId(auth()->user()->id)
-            ->wherePublicId(request('scheduled_report_id'))
-            ->delete();
+        $output = fopen('php://output', 'w') or Utils::fatalError();
+        $date = date('Y-m-d');
 
-        session()->flash('message', trans('texts.deleted_scheduled_report'));
-    }
+        $columns = array_map(function($key, $val) {
+            return is_array($val) ? $key : $val;
+        }, array_keys($columns), $columns);
 
-    public function showEmailReport()
-    {
-        $data = [
-            'account' => auth()->user()->account,
-        ];
+        header('Content-Type:application/csv');
+        header("Content-Disposition:attachment;filename={$date}-invoiceninja-{$reportType}-report.csv");
 
-        return view('reports.emails', $data);
-    }
+        Utils::exportData($output, $data, Utils::trans($columns));
 
-    public function loadEmailReport($startDate, $endDate)
-    {
-        $data = dispatch(new LoadPostmarkStats($startDate, $endDate));
+        /*
+        fwrite($output, trans('texts.totals'));
+        foreach ($totals as $currencyId => $fields) {
+            foreach ($fields as $key => $value) {
+                fwrite($output, ',' . trans("texts.{$key}"));
+            }
+            fwrite($output, "\n");
+            break;
+        }
 
-        return response()->json($data);
+        foreach ($totals as $currencyId => $fields) {
+            $csv = Utils::getFromCache($currencyId, 'currencies')->name . ',';
+            foreach ($fields as $key => $value) {
+                $csv .= '"' . Utils::formatMoney($value, $currencyId).'",';
+            }
+            fwrite($output, $csv."\n");
+        }
+        */
+
+        fclose($output);
+        exit;
     }
 }

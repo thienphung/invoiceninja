@@ -2,7 +2,6 @@
 
 namespace App\Providers;
 
-use Gate;
 use Illuminate\Contracts\Auth\Access\Gate as GateContract;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
@@ -22,7 +21,6 @@ class AuthServiceProvider extends ServiceProvider
         \App\Models\RecurringExpense::class => \App\Policies\RecurringExpensePolicy::class,
         \App\Models\ExpenseCategory::class => \App\Policies\ExpenseCategoryPolicy::class,
         \App\Models\Invoice::class => \App\Policies\InvoicePolicy::class,
-        \App\Models\Quote::class => \App\Policies\QuotePolicy::class,
         \App\Models\Payment::class => \App\Policies\PaymentPolicy::class,
         \App\Models\Task::class => \App\Policies\TaskPolicy::class,
         \App\Models\Vendor::class => \App\Policies\VendorPolicy::class,
@@ -30,15 +28,9 @@ class AuthServiceProvider extends ServiceProvider
         \App\Models\TaxRate::class => \App\Policies\TaxRatePolicy::class,
         \App\Models\AccountGateway::class => \App\Policies\AccountGatewayPolicy::class,
         \App\Models\AccountToken::class => \App\Policies\TokenPolicy::class,
-        \App\Models\Subscription::class => \App\Policies\SubscriptionPolicy::class,
         \App\Models\BankAccount::class => \App\Policies\BankAccountPolicy::class,
         \App\Models\PaymentTerm::class => \App\Policies\PaymentTermPolicy::class,
         \App\Models\Project::class => \App\Policies\ProjectPolicy::class,
-        \App\Models\AccountGatewayToken::class => \App\Policies\CustomerPolicy::class,
-        \App\Models\Proposal::class => \App\Policies\ProposalPolicy::class,
-        \App\Models\ProposalSnippet::class => \App\Policies\ProposalSnippetPolicy::class,
-        \App\Models\ProposalTemplate::class => \App\Policies\ProposalTemplatePolicy::class,
-        \App\Models\ProposalCategory::class => \App\Policies\ProposalCategoryPolicy::class,
     ];
 
     /**
@@ -48,12 +40,12 @@ class AuthServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function boot()
+    public function boot(GateContract $gate)
     {
         foreach (get_class_methods(new \App\Policies\GenericEntityPolicy()) as $method) {
-            Gate::define($method, "App\Policies\GenericEntityPolicy@{$method}");
+            $gate->define($method, "App\Policies\GenericEntityPolicy@{$method}");
         }
 
-        $this->registerPolicies();
+        $this->registerPolicies($gate);
     }
 }

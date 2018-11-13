@@ -26,8 +26,8 @@ class DatatableService
         $table = Datatable::query($query);
 
         if ($datatable->isBulkEdit) {
-            $table->addColumn('checkbox', function ($model) use ($datatable) {
-                $can_edit = Auth::user()->hasPermission('edit_' . $datatable->entityType) || (isset($model->user_id) && Auth::user()->id == $model->user_id);
+            $table->addColumn('checkbox', function ($model) {
+                $can_edit = Auth::user()->hasPermission('edit_all') || (isset($model->user_id) && Auth::user()->id == $model->user_id);
 
                 return ! $can_edit ? '' : '<input type="checkbox" name="ids[]" value="' . $model->public_id
                         . '" ' . Utils::getEntityRowClass($model) . '>';
@@ -65,7 +65,7 @@ class DatatableService
             $hasAction = false;
             $str = '<center style="min-width:100px">';
 
-            $can_edit = Auth::user()->hasPermission('edit_' . $datatable->entityType) || (isset($model->user_id) && Auth::user()->id == $model->user_id);
+            $can_edit = Auth::user()->hasPermission('edit_all') || (isset($model->user_id) && Auth::user()->id == $model->user_id);
 
             if (property_exists($model, 'is_deleted') && $model->is_deleted) {
                 $str .= '<button type="button" class="btn btn-sm btn-danger tr-status">'.trans('texts.deleted').'</button>';
@@ -78,7 +78,7 @@ class DatatableService
             $dropdown_contents = '';
 
             $lastIsDivider = false;
-            if (! property_exists($model, 'is_deleted') || ! $model->is_deleted) {
+            if (! $model->deleted_at || $model->deleted_at == '0000-00-00') {
                 foreach ($datatable->actions() as $action) {
                     if (count($action)) {
                         // if show function isn't set default to true
@@ -119,15 +119,11 @@ class DatatableService
                     $dropdown_contents .= '<li class="divider"></li>';
                 }
 
-                if (! $model->deleted_at || $model->deleted_at == '0000-00-00') {
-                    if (($datatable->entityType != ENTITY_USER || $model->public_id) && $can_edit) {
-                        $dropdown_contents .= "<li><a href=\"javascript:submitForm_{$datatable->entityType}('archive', {$model->public_id})\">"
-                                . mtrans($datatable->entityType, "archive_{$datatable->entityType}") . '</a></li>';
-                    }
+                if (($datatable->entityType != ENTITY_USER || $model->public_id) && $can_edit) {
+                    $dropdown_contents .= "<li><a href=\"javascript:submitForm_{$datatable->entityType}('archive', {$model->public_id})\">"
+                            . mtrans($datatable->entityType, "archive_{$datatable->entityType}") . '</a></li>';
                 }
-            }
-
-            if ($model->deleted_at && $model->deleted_at != '0000-00-00' && $can_edit) {
+            } elseif ($can_edit) {
                 $dropdown_contents .= "<li><a href=\"javascript:submitForm_{$datatable->entityType}('restore', {$model->public_id})\">"
                     . mtrans($datatable->entityType, "restore_{$datatable->entityType}") . '</a></li>';
             }

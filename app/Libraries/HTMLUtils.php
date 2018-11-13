@@ -22,7 +22,6 @@ class HTMLUtils
         $config->set('CSS.AllowImportant', true);
         $config->set('CSS.AllowTricky', true);
         $config->set('CSS.Trusted', true);
-        $config->set('Cache.SerializerPath', base_path('storage/framework/cache'));
 
         // Create a new purifier instance
         $purifier = new HTMLPurifier($config);
@@ -40,11 +39,7 @@ class HTMLUtils
 
     public static function sanitizeHTML($html)
     {
-        $html = html_entity_decode($html);
-
         $config = HTMLPurifier_Config::createDefault();
-        $config->set('Cache.SerializerPath', base_path('storage/framework/cache'));
-
         $purifier = new HTMLPurifier($config);
 
         return $purifier->purify($html);
@@ -60,18 +55,5 @@ class HTMLUtils
         } else {
             return $previous;
         }
-    }
-
-    public static function getEnvForAccount($field, $default = '')
-    {
-        $key = '';
-
-        if ($user = auth()->user()) {
-            $key .= $user->account->id . '_';
-        }
-
-        $key .= $field;
-
-        return env($key, env($field, $default));
     }
 }

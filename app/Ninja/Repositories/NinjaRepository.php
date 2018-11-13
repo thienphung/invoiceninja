@@ -16,7 +16,6 @@ class NinjaRepository
 
         $company = $account->company;
         $company->fill($data);
-        $company->plan_expires = $company->plan_expires ?: null;
         $company->save();
     }
 }

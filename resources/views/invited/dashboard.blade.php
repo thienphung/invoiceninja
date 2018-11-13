@@ -276,9 +276,6 @@
 
     <div class="container main-container">
 
-        @if ($message = $client->customMessage(CUSTOM_MESSAGE_DASHBOARD))
-            @include('invited.custom_message', ['message' => $message])
-        @endif
 
         <div class="row" id="main-row">
             <div class="col-md-3" id="contact-details">
@@ -296,14 +293,14 @@
                     {{ $client->getCityState() }}<br/>
                 @endif
                 @if ($client->country)
-                    {{ $client->country->getName() }}<br/>
+                    {{ $client->country->name }}<br/>
                 @endif
                 <br>
                 @if ($contact->email)
                     {!! HTML::mailto($contact->email, $contact->email) !!}<br>
                 @endif
                 @if ($client->website)
-                    {{ $client->present()->websiteLink }}<br>
+                    {!! HTML::link($client->website, $client->website) !!}<br>
                 @endif
                 @if ($contact->phone)
                     {{ $contact->phone }}<br>
@@ -344,24 +341,13 @@
             </div>
         </div>
 
-        <div class="row">
-            <div class="col-xs-12">
-                @if (!empty($account->getTokenGatewayId()))
-                    <div class="pull-left">
-                        @include('payments.paymentmethods_list')
-                    </div>
-                @endif
-                <div class="pull-right">
-                    {!! Button::success(strtoupper(trans("texts.edit_details")))->asLinkTo(URL::to('/client/details'))->withAttributes(['id' => 'editDetailsButton']) !!}
-                    @if ($client->hasRecurringInvoices())
-                         &nbsp; {!! Button::primary(strtoupper(trans("texts.recurring")))->asLinkTo(URL::to('/client/invoices/recurring')) !!}
-                    @endif
-                    &nbsp; {!! Button::primary(strtoupper(trans("texts.view_statement")))->asLinkTo(URL::to('/client/statement')) !!}
+        @if (!empty($account->getTokenGatewayId()))
+                <div class="row">
+                    <div class="col-xs-12">
+                    @include('payments.paymentmethods_list')
                 </div>
-            </div>
         </div>
-
-        <br/>
+        @endif
 
         <div class="row" id="account-row">
             <div class="col-md-2 invoices-from">
@@ -385,7 +371,7 @@
                     {{ $account->getCityState() }}<br/>
                 @endif
                 @if ($account->country)
-                    {{ $account->country->getName() }}
+                    {{ $account->country->name }}
                 @endif
             </div>
             <div class="col-md-3 phone-web-details">

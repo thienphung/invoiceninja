@@ -2,18 +2,6 @@
 
 @section('head_css')
     <link href="{{ asset('css/built.css') }}?no_cache={{ NINJA_VERSION }}" rel="stylesheet" type="text/css"/>
-
-    @if (Utils::isNinjaDev())
-        <style type="text/css">
-            .nav-footer {
-                @if (config('mail.driver') == 'log' && ! config('services.postmark'))
-                    background-color: #50C878 !important;
-                @else
-                    background-color: #FD6A02 !important;
-                @endif
-            }
-        </style>
-    @endif
 @stop
 
 @section('head')
@@ -49,14 +37,6 @@
     });
   }
 
-  function openTimeTracker() {
-      var width = 1060;
-      var height = 700;
-      var left = (screen.width/2)-(width/4);
-      var top = (screen.height/2)-(height/1.5);
-      window.open("{{ url('/time_tracker') }}", "time-tracker", "width="+width+",height="+height+",scrollbars=no,toolbar=no,screenx="+left+",screeny="+top+",location=no,titlebar=no,directories=no,status=no,menubar=no");
-  }
-
   window.loadedSearchData = false;
   function onSearchBlur() {
       $('#search').typeahead('val', '');
@@ -73,47 +53,25 @@
             hint: true,
             highlight: true,
           }
-          @if (Auth::check() && Auth::user()->account->customLabel('client1'))
+          @if (Auth::check() && Auth::user()->account->custom_client_label1)
           ,{
             name: 'data',
             limit: 3,
             display: 'value',
-            source: searchData(data['{{ Auth::user()->account->present()->customLabel('client1') }}'], 'tokens'),
+            source: searchData(data['{{ Auth::user()->account->custom_client_label1 }}'], 'tokens'),
             templates: {
-              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->present()->customLabel('client1') }}</span>'
+              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->custom_client_label1 }}</span>'
             }
           }
           @endif
-          @if (Auth::check() && Auth::user()->account->customLabel('client2'))
+          @if (Auth::check() && Auth::user()->account->custom_client_label2)
           ,{
             name: 'data',
             limit: 3,
             display: 'value',
-            source: searchData(data['{{ Auth::user()->account->present()->customLabel('client2') }}'], 'tokens'),
+            source: searchData(data['{{ Auth::user()->account->custom_client_label2 }}'], 'tokens'),
             templates: {
-              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->present()->customLabel('client2') }}</span>'
-            }
-          }
-          @endif
-          @if (Auth::check() && Auth::user()->account->customLabel('invoice_text1'))
-          ,{
-            name: 'data',
-            limit: 3,
-            display: 'value',
-            source: searchData(data['{{ Auth::user()->account->present()->customLabel('invoice_text1') }}'], 'tokens'),
-            templates: {
-              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->present()->customLabel('invoice_text1') }}</span>'
-            }
-          }
-          @endif
-          @if (Auth::check() && Auth::user()->account->customLabel('invoice_text2'))
-          ,{
-            name: 'data',
-            limit: 3,
-            display: 'value',
-            source: searchData(data['{{ Auth::user()->account->present()->customLabel('invoice_text2') }}'], 'tokens'),
-            templates: {
-              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->present()->customLabel('invoice_text2') }}</span>'
+              header: '&nbsp;<span style="font-weight:600;font-size:16px">{{ Auth::user()->account->custom_client_label2 }}</span>'
             }
           }
           @endif
@@ -232,6 +190,8 @@
         }
     });
 
+    $('[data-toggle="tooltip"]').tooltip();
+
     // set timeout onDomReady
     setTimeout(delayedFragmentTargetOffset, 500);
 
@@ -252,7 +212,7 @@
 
 @section('body')
 
-@if (Utils::isNinjaProd() && ! Request::is('settings/account_management'))
+@if ( ! Request::is('settings/account_management'))
   @include('partials.upgrade_modal')
 @endif
 
@@ -283,9 +243,7 @@
 
         @if (Auth::check())
           @if (!Auth::user()->registered)
-              @if (!Auth::user()->confirmed)
-                {!! Button::success(trans('texts.sign_up'))->withAttributes(array('id' => 'signUpButton', 'onclick' => 'showSignUp()', 'style' => 'max-width:100px;;overflow:hidden'))->small() !!} &nbsp;
-              @endif
+            {!! Button::success(trans('texts.sign_up'))->withAttributes(array('id' => 'signUpButton', 'data-toggle'=>'modal', 'data-target'=>'#signUpModal', 'style' => 'max-width:100px;;overflow:hidden'))->small() !!} &nbsp;
           @elseif (Utils::isNinjaProd() && (!Auth::user()->isPro() || Auth::user()->isTrial()))
             @if (Auth::user()->account->company->hasActivePromo())
                 {!! Button::warning(trans('texts.plan_upgrade'))->withAttributes(array('onclick' => 'showUpgradeModal()', 'style' => 'max-width:100px;overflow:hidden'))->small() !!} &nbsp;
@@ -342,7 +300,9 @@
             @endif
             <li class="divider"></li>
             @if (Utils::isAdmin() && Auth::user()->confirmed && Utils::getResllerType() != RESELLER_ACCOUNT_COUNT)
-              @if (!session(SESSION_USER_ACCOUNTS) || count(session(SESSION_USER_ACCOUNTS)) < 5)
+              @if (count(session(SESSION_USER_ACCOUNTS)) > 1)
+                  <li>{!! link_to('/manage_companies', trans('texts.manage_companies')) !!}</li>
+              @elseif (!session(SESSION_USER_ACCOUNTS) || count(session(SESSION_USER_ACCOUNTS)) < 5)
                   <li>{!! link_to('#', trans('texts.add_company'), ['onclick' => 'showSignUp()']) !!}</li>
               @endif
             @endif
@@ -384,8 +344,6 @@
             'recurring_invoices' => 'recurring',
             'credits' => false,
             'quotes' => false,
-            'proposals' => false,
-            'projects' => false,
             'tasks' => false,
             'expenses' => false,
             'vendors' => false,
@@ -399,7 +357,7 @@
 
 </nav>
 
-<div id="wrapper" class='{{ session(SESSION_LEFT_SIDEBAR) ? 'toggled-left' : '' }} {{ session(SESSION_RIGHT_SIDEBAR, true) ? 'toggled-right' : '' }}'>
+<div id="wrapper" class='{!! session(SESSION_LEFT_SIDEBAR) ? 'toggled-left' : '' !!} {!! session(SESSION_RIGHT_SIDEBAR, true) ? 'toggled-right' : '' !!}'>
 
     <!-- Sidebar -->
     <div id="left-sidebar-wrapper" class="hide-phone">
@@ -413,27 +371,25 @@
                 'recurring_invoices',
                 'credits',
                 'quotes',
-                'proposals',
-                'projects',
                 'tasks',
                 'expenses',
                 'vendors',
             ] as $option)
-                @if(!Auth::user()->account->isModuleEnabled(substr($option, 0, -1)))
-                    {{ '' }}
-                @else
-                    @include('partials.navigation_option')
-                @endif
+            @if (in_array($option, ['dashboard', 'settings'])
+                || Auth::user()->can('view', substr($option, 0, -1))
+                || Auth::user()->can('create', substr($option, 0, -1)))
+                @include('partials.navigation_option')
+            @endif
             @endforeach
             @if ( ! Utils::isNinjaProd())
-                @foreach (Module::collections() as $module)
-                    @includeWhen(empty($module->get('no-sidebar')) || $module->get('no-sidebar') != '1', 'partials.navigation_option', [
+                @foreach (Module::all() as $module)
+                    @include('partials.navigation_option', [
                         'option' => $module->getAlias(),
                         'icon' => $module->get('icon', 'th-large'),
                     ])
                 @endforeach
             @endif
-            @if (Auth::user()->hasPermission('view_reports'))
+            @if (Auth::user()->hasPermission('view_all'))
                 @include('partials.navigation_option', ['option' => 'reports'])
             @endif
             @include('partials.navigation_option', ['option' => 'settings'])
@@ -484,7 +440,7 @@
           @endif
 
           @if (Session::has('message'))
-            <div class="alert alert-info alert-hide" style="z-index:9999">
+            <div class="alert alert-info alert-hide">
               {{ Session::get('message') }}
             </div>
           @elseif (Session::has('news_feed_message'))
@@ -498,12 +454,8 @@
               <div class="alert alert-danger">{!! Session::get('error') !!}</div>
           @endif
 
-          <div class="pull-right">
-              @yield('top-right')
-          </div>
-
           @if (!isset($showBreadcrumbs) || $showBreadcrumbs)
-            {!! Form::breadcrumbs((! empty($entity) && $entity->exists) ? $entity->present()->statusLabel : false) !!}
+            {!! Form::breadcrumbs((isset($entity) && $entity->exists) ? $entity->present()->statusLabel : false) !!}
           @endif
 
           @yield('content')
@@ -512,11 +464,7 @@
             <div class="col-md-12">
 
               @if (Utils::isNinjaProd())
-                @if (Auth::check() && Auth::user()->hasActivePromo())
-                    {!! trans('texts.promotion_footer', [
-                            'link' => '<a href="javascript:showUpgradeModal()">' . trans('texts.click_here') . '</a>'
-                        ]) !!}
-                @elseif (Auth::check() && Auth::user()->isTrial())
+                @if (Auth::check() && Auth::user()->isTrial())
                   {!! trans(Auth::user()->account->getCountTrialDaysLeft() == 0 ? 'texts.trial_footer_last_day' : 'texts.trial_footer', [
                           'count' => Auth::user()->account->getCountTrialDaysLeft(),
                           'link' => '<a href="javascript:showUpgradeModal()">' . trans('texts.click_here') . '</a>'
@@ -534,10 +482,6 @@
 @include('partials.contact_us')
 @include('partials.sign_up')
 @include('partials.keyboard_shortcuts')
-
-@if (auth()->check() && ! auth()->user()->hasAcceptedLatestTerms())
-    @include('partials.accept_terms')
-@endif
 
 </div>
 

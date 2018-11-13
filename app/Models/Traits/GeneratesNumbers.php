@@ -62,7 +62,6 @@ trait GeneratesNumbers
 
         // update the counter to be caught up
         if ($counterOffset > 1) {
-            $this->syncOriginal();
             if ($entity->isEntityType(ENTITY_CLIENT)) {
                 if ($this->clientNumbersEnabled()) {
                     $this->client_number_counter += $counterOffset - 1;
@@ -137,10 +136,6 @@ trait GeneratesNumbers
      */
     public function hasClientNumberPattern($invoice)
     {
-        if (! $this->isPro()) {
-            return false;
-        }
-
         $pattern = $invoice->invoice_type_id == INVOICE_TYPE_QUOTE ? $this->quote_number_pattern : $this->invoice_number_pattern;
 
         return strstr($pattern, '$client') !== false || strstr($pattern, '$idNumber') !== false;
@@ -350,24 +345,18 @@ trait GeneratesNumbers
             case FREQUENCY_THREE_MONTHS:
                 $resetDate->addMonths(3);
                 break;
-            case FREQUENCY_FOUR_MONTHS:
-                $resetDate->addMonths(4);
-                break;
             case FREQUENCY_SIX_MONTHS:
                 $resetDate->addMonths(6);
                 break;
             case FREQUENCY_ANNUALLY:
                 $resetDate->addYear();
                 break;
-            case FREQUENCY_TWO_YEARS:
-                $resetDate->addYears(2);
-                break;
         }
 
         $this->reset_counter_date = $resetDate->format('Y-m-d');
         $this->invoice_number_counter = 1;
         $this->quote_number_counter = 1;
-        $this->credit_number_counter = $this->credit_number_counter > 0 ? 1 : 0;
+        $this->credit_number_counter = 1;
         $this->save();
     }
 }

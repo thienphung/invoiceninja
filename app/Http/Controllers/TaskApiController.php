@@ -46,7 +46,7 @@ class TaskApiController extends BaseAPIController
         $tasks = Task::scope()
                         ->withTrashed()
                         ->with('client', 'invoice', 'project')
-                        ->orderBy('updated_at', 'desc');
+                        ->orderBy('created_at', 'desc');
 
         return $this->listResponse($tasks);
     }
@@ -110,36 +110,6 @@ class TaskApiController extends BaseAPIController
             $data['client'] = $data['client_id'];
         }
 
-        if (! empty($data['time_details'])) {
-            $timeLog = [];
-            foreach ($data['time_details'] as $detail) {
-                $startTime = strtotime($detail['start_datetime']);
-                $endTime = false;
-                if (! empty($detail['end_datetime'])) {
-                    $endTime = strtotime($detail['end_datetime']);
-                } else {
-                    $duration = 0;
-                    if (! empty($detail['duration_seconds'])) {
-                        $duration += $detail['duration_seconds'];
-                    }
-                    if (! empty($detail['duration_minutes'])) {
-                        $duration += $detail['duration_minutes'] * 60;
-                    }
-                    if (! empty($detail['duration_hours'])) {
-                        $duration += $detail['duration_hours'] * 60 * 60;
-                    }
-                    if ($duration) {
-                        $endTime = $startTime + $duration;
-                    }
-                }
-                $timeLog[] = [$startTime, $endTime];
-                if (! $endTime) {
-                    $data['is_running'] = true;
-                }
-            }
-            $data['time_log'] = json_encode($timeLog);
-        }
-
         $task = $this->taskRepo->save($taskId, $data);
         $task = Task::scope($task->public_id)->with('client')->first();
 
@@ -179,10 +149,6 @@ class TaskApiController extends BaseAPIController
      */
     public function update(UpdateTaskRequest $request)
     {
-        if ($request->action) {
-            return $this->handleAction($request);
-        }
-
         $task = $request->entity();
 
         $task = $this->taskRepo->save($task->public_id, \Illuminate\Support\Facades\Input::all());

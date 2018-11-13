@@ -46,7 +46,7 @@ class CreditApiController extends BaseAPIController
         $credits = Credit::scope()
                         ->withTrashed()
                         ->with(['client'])
-                        ->orderBy('updated_at', 'desc');
+                        ->orderBy('created_at', 'desc');
 
         return $this->listResponse($credits);
     }

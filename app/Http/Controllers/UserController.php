@@ -45,6 +45,15 @@ class UserController extends BaseController
         return $this->userService->getDatatable(Auth::user()->account_id);
     }
 
+    public function setTheme()
+    {
+        $user = User::find(Auth::user()->id);
+        $user->theme_id = Input::get('theme_id');
+        $user->save();
+
+        return Redirect::to(Input::get('path'));
+    }
+
     public function forcePDFJS()
     {
         $user = Auth::user();
@@ -54,21 +63,6 @@ class UserController extends BaseController
         Session::flash('message', trans('texts.updated_settings'));
 
         return Redirect::to('/dashboard');
-    }
-
-    /**
-     * Display the specified resource.
-     *
-     * @param int   $id
-     * @param mixed $publicId
-     *
-     * @return Response
-     */
-    public function show($publicId)
-    {
-        Session::reflash();
-
-        return redirect("users/$publicId/edit");
     }
 
     public function edit($publicId)
@@ -109,7 +103,7 @@ class UserController extends BaseController
         }
 
         if (! Auth::user()->confirmed) {
-            Session::flash('error', trans('texts.confirmation_required', ['link' => link_to('/resend_confirmation', trans('texts.click_here'))]));
+            Session::flash('error', trans('texts.confirmation_required'));
 
             return Redirect::to('settings/' . ACCOUNT_USER_MANAGEMENT);
         }
@@ -162,89 +156,80 @@ class UserController extends BaseController
      */
     public function save($userPublicId = false)
     {
+        if (Auth::user()->hasFeature(FEATURE_USERS)) {
+            $rules = [
+                'first_name' => 'required',
+                'last_name' => 'required',
+            ];
 
-        if (! Auth::user()->hasFeature(FEATURE_USERS)) {
-            return Redirect::to('settings/' . ACCOUNT_USER_MANAGEMENT);
-        }
+            if ($userPublicId) {
+                $user = User::where('account_id', '=', Auth::user()->account_id)
+                            ->where('public_id', '=', $userPublicId)
+                            ->withTrashed()
+                            ->firstOrFail();
 
-        $rules = [
-            'first_name' => 'required',
-            'last_name' => 'required',
-        ];
-
-        if ($userPublicId) {
-            $user = User::where('account_id', '=', Auth::user()->account_id)
-                        ->where('public_id', '=', $userPublicId)
-                        ->withTrashed()
-                        ->firstOrFail();
-
-            $rules['email'] = 'required|email|unique:users,email,'.$user->id.',id';
-        } else {
-            $user = false;
-            $rules['email'] = 'required|email|unique:users';
-        }
-
-        $validator = Validator::make(Input::all(), $rules);
-
-        if ($validator->fails()) {
-            return Redirect::to($userPublicId ? 'users/edit' : 'users/create')
-                        ->withErrors($validator)
-                        ->withInput();
-        }
-
-        if (! \App\Models\LookupUser::validateField('email', Input::get('email'), $user)) {
-            return Redirect::to($userPublicId ? 'users/edit' : 'users/create')
-                ->withError(trans('texts.email_taken'))
-                ->withInput();
-        }
-
-        if ($userPublicId) {
-            $user->first_name = trim(Input::get('first_name'));
-            $user->last_name = trim(Input::get('last_name'));
-            $user->username = trim(Input::get('email'));
-            $user->email = trim(Input::get('email'));
-            if (Auth::user()->hasFeature(FEATURE_USER_PERMISSIONS)) {
-                $user->is_admin = boolval(Input::get('is_admin'));
-                $user->permissions = self::formatUserPermissions(Input::get('permissions'));
+                $rules['email'] = 'required|email|unique:users,email,'.$user->id.',id';
+            } else {
+                $user = false;
+                $rules['email'] = 'required|email|unique:users';
             }
-        } else {
-            $lastUser = User::withTrashed()->where('account_id', '=', Auth::user()->account_id)
-                        ->orderBy('public_id', 'DESC')->first();
 
-            $user = new User();
-            $user->account_id = Auth::user()->account_id;
-            $user->first_name = trim(Input::get('first_name'));
-            $user->last_name = trim(Input::get('last_name'));
-            $user->username = trim(Input::get('email'));
-            $user->email = trim(Input::get('email'));
-            $user->registered = true;
-            $user->password = strtolower(str_random(RANDOM_KEY_LENGTH));
-            $user->confirmation_code = strtolower(str_random(RANDOM_KEY_LENGTH));
-            $user->public_id = $lastUser->public_id + 1;
-            if (Auth::user()->hasFeature(FEATURE_USER_PERMISSIONS)) {
-                $user->is_admin = boolval(Input::get('is_admin'));
-                $user->permissions = self::formatUserPermissions(Input::get('permissions'));
+            $validator = Validator::make(Input::all(), $rules);
+
+            if ($validator->fails()) {
+                return Redirect::to($userPublicId ? 'users/edit' : 'users/create')
+                            ->withErrors($validator)
+                            ->withInput();
             }
+
+            if (! \App\Models\LookupUser::validateField('email', Input::get('email'), $user)) {
+                return Redirect::to($userPublicId ? 'users/edit' : 'users/create')
+                    ->withError(trans('texts.email_taken'))
+                    ->withInput();
+            }
+
+            if ($userPublicId) {
+                $user->first_name = trim(Input::get('first_name'));
+                $user->last_name = trim(Input::get('last_name'));
+                $user->username = trim(Input::get('email'));
+                $user->email = trim(Input::get('email'));
+                if (Auth::user()->hasFeature(FEATURE_USER_PERMISSIONS)) {
+                    $user->is_admin = boolval(Input::get('is_admin'));
+                    $user->permissions = Input::get('permissions');
+                }
+            } else {
+                $lastUser = User::withTrashed()->where('account_id', '=', Auth::user()->account_id)
+                            ->orderBy('public_id', 'DESC')->first();
+
+                $user = new User();
+                $user->account_id = Auth::user()->account_id;
+                $user->first_name = trim(Input::get('first_name'));
+                $user->last_name = trim(Input::get('last_name'));
+                $user->username = trim(Input::get('email'));
+                $user->email = trim(Input::get('email'));
+                $user->registered = true;
+                $user->password = strtolower(str_random(RANDOM_KEY_LENGTH));
+                $user->confirmation_code = strtolower(str_random(RANDOM_KEY_LENGTH));
+                $user->public_id = $lastUser->public_id + 1;
+                if (Auth::user()->hasFeature(FEATURE_USER_PERMISSIONS)) {
+                    $user->is_admin = boolval(Input::get('is_admin'));
+                    $user->permissions = Input::get('permissions');
+                }
+            }
+
+            $user->save();
+
+            if (! $user->confirmed && Input::get('action') === 'email') {
+                $this->userMailer->sendConfirmation($user, Auth::user());
+                $message = trans('texts.sent_invite');
+            } else {
+                $message = trans('texts.updated_user');
+            }
+
+            Session::flash('message', $message);
         }
-
-        $user->save();
-
-        if (! $user->confirmed && Input::get('action') === 'email') {
-            $this->userMailer->sendConfirmation($user, Auth::user());
-            $message = trans('texts.sent_invite');
-        } else {
-            $message = trans('texts.updated_user');
-        }
-
-        Session::flash('message', $message);
 
         return Redirect::to('users/' . $user->public_id . '/edit');
-    }
-
-    private function formatUserPermissions(array $permissions) {
-
-        return json_encode(array_diff(array_values($permissions),[0]));
-
     }
 
     public function sendConfirmation($userPublicId)
@@ -398,19 +383,5 @@ class UserController extends BaseController
         }
 
         return RESULT_SUCCESS;
-    }
-
-    public function acceptTerms()
-    {
-        $ip = Request::getClientIp();
-        $referer = Request::server('HTTP_REFERER');
-        $message = '';
-
-        if (request()->accepted_terms && request()->accepted_privacy) {
-            auth()->user()->acceptLatestTerms($ip)->save();
-            $message = trans('texts.accepted_terms');
-        }
-
-        return redirect($referer)->withMessage($message);
     }
 }

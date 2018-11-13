@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\DeleteVendorRequest;
 use App\Http\Requests\VendorRequest;
 use App\Http\Requests\CreateVendorRequest;
 use App\Http\Requests\UpdateVendorRequest;
@@ -53,7 +52,7 @@ class VendorApiController extends BaseAPIController
     {
         $vendors = Vendor::scope()
                     ->withTrashed()
-                    ->orderBy('updated_at', 'desc');
+                    ->orderBy('created_at', 'desc');
 
         return $this->listResponse($vendors);
     }
@@ -187,7 +186,7 @@ class VendorApiController extends BaseAPIController
      *   )
      * )
      */
-    public function destroy(DeleteVendorRequest $request)
+    public function destroy(UpdateVendorRequest $request)
     {
         $vendor = $request->entity();
 

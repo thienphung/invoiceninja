@@ -28,10 +28,10 @@ class $CLASS$ extends AuthServiceProvider
      *
      * @return void
      */
-    public function boot()
+    public function boot(GateContract $gate)
     {
-        parent::boot();
-
+        parent::boot($gate);
+        
         $this->registerTranslations();
         $this->registerConfig();
         $this->registerViews();

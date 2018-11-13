@@ -17,7 +17,6 @@
 	{!! Former::open($url)
             ->addClass('warn-on-exit main-form')
             ->onsubmit('return onFormSubmit(event)')
-            ->autocomplete('off')
             ->method($method) !!}
     <div style="display:none">
         {!! Former::text('action') !!}
@@ -56,7 +55,7 @@
                     {!! Former::select('expense_currency_id')->addOption('','')
                             ->data_bind('combobox: expense_currency_id')
                             ->label(trans('texts.currency_id'))
-                            ->data_placeholder(Utils::getFromCache($account->getCurrencyId(), 'currencies')->getTranslatedName())
+                            ->data_placeholder(Utils::getFromCache($account->getCurrencyId(), 'currencies')->name)
                             ->fromQuery($currencies, 'name', 'id') !!}
 
                     @if (! $isRecurring)
@@ -78,8 +77,6 @@
                                 ->data_bind('combobox: client_id')
                                 ->addGroupClass('client-select') !!}
                     @endif
-
-                    @include('partials/custom_fields', ['entityType' => ENTITY_EXPENSE])
 
                     @if (count($taxRates))
                         @if (!$expense || ($expense && (!$expense->tax_name1 && !$expense->tax_name2)))
@@ -114,14 +111,12 @@
                                 ->data_bind("datePicker: start_date, valueUpdate: 'afterkeydown'")
     							->data_date_format(Session::get(SESSION_DATE_PICKER_FORMAT, DEFAULT_DATE_PICKER_FORMAT))
                                 ->appendIcon('calendar')
-                                ->addGroupClass('start_date')
-                                ->data_date_start_date($expense ? false : $account->formatDate($account->getDateTime())) !!}
+                                ->addGroupClass('start_date') !!}
                         {!! Former::text('end_date')
                                 ->data_bind("datePicker: end_date, valueUpdate: 'afterkeydown'")
     							->data_date_format(Session::get(SESSION_DATE_PICKER_FORMAT, DEFAULT_DATE_PICKER_FORMAT))
                                 ->appendIcon('calendar')
-                                ->addGroupClass('end_date')
-                                ->data_date_start_date($expense ? false : $account->formatDate($account->getDateTime())) !!}
+                                ->addGroupClass('end_date') !!}
 
                     @else
                         @if ((! $expense || ! $expense->transaction_id))
@@ -208,11 +203,9 @@
                             </label>
                             <div class="col-lg-8 col-sm-8">
                                 <div role="tabpanel" class="tab-pane" id="attached-documents" style="position:relative;z-index:9">
-                                    <div id="document-upload">
-                                        <div class="dropzone">
-                                            <div data-bind="foreach: documents">
-                                                <input type="hidden" name="document_ids[]" data-bind="value: public_id"/>
-                                            </div>
+                                    <div id="document-upload" class="dropzone">
+                                        <div data-bind="foreach: documents">
+                                            <input type="hidden" name="document_ids[]" data-bind="value: public_id"/>
                                         </div>
                                     </div>
                                 </div>
@@ -261,6 +254,8 @@
 	{!! Former::close() !!}
 
     <script type="text/javascript">
+        Dropzone.autoDiscover = false;
+
         var vendors = {!! $vendors !!};
         var clients = {!! $clients !!};
         var categories = {!! $categories !!};
@@ -276,7 +271,7 @@
 
         function onFormSubmit(event) {
             if (window.countUploadingDocuments > 0) {
-                swal({!! json_encode(trans('texts.wait_for_upload')) !!});
+                swal("{!! trans('texts.wait_for_upload') !!}");
                 return false;
             }
 
@@ -292,7 +287,6 @@
             var client = clientMap[clientId];
             if (client) {
                 model.invoice_currency_id(client.currency_id);
-                model.updateExchangeRate();
             }
         }
 
@@ -356,15 +350,9 @@
                 }
                 $clientSelect.append(new Option(clientName, client.public_id));
             }
-            $clientSelect.combobox({highlighter: comboboxHighlighter}).change(function() {
+            $clientSelect.combobox().change(function() {
                 onClientChange();
             });
-
-            $('#invoice_currency_id, #expense_currency_id').on('change', function() {
-                setTimeout(function() {
-                    model.updateExchangeRate();
-                }, 1);
-            })
 
             @if ($data)
                 // this means we failed so we'll reload the previous state
@@ -429,8 +417,51 @@
                         if($('#document-upload .fallback input').val())$(this).attr('enctype', 'multipart/form-data')
                         else $(this).removeAttr('enctype')
                     })
+                // Initialize document upload
+                dropzone = new Dropzone('#document-upload', {
+                    url:{!! json_encode(url('documents')) !!},
+                    params:{
+                        _token:"{{ Session::getToken() }}"
+                    },
+                    acceptedFiles:{!! json_encode(implode(',',\App\Models\Document::$allowedMimes)) !!},
+                    addRemoveLinks:true,
+                    dictRemoveFileConfirmation:"{{trans('texts.are_you_sure')}}",
+                    @foreach(['default_message', 'fallback_message', 'fallback_text', 'file_too_big', 'invalid_file_type', 'response_error', 'cancel_upload', 'cancel_upload_confirmation', 'remove_file'] as $key)
+                        "dict{{ Utils::toClassCase($key) }}" : "{!! strip_tags(addslashes(trans('texts.dropzone_'.$key))) !!}",
+                    @endforeach
+                    maxFilesize:{{floatval(MAX_DOCUMENT_SIZE/1000)}},
+                });
+                if(dropzone instanceof Dropzone){
+                    dropzone.on("addedfile",handleDocumentAdded);
+                    dropzone.on("removedfile",handleDocumentRemoved);
+                    dropzone.on("success",handleDocumentUploaded);
+                    dropzone.on("canceled",handleDocumentCanceled);
+                    dropzone.on("error",handleDocumentError);
+                    for (var i=0; i<model.documents().length; i++) {
+                        var document = model.documents()[i];
+                        var mockFile = {
+                            name:document.name(),
+                            size:document.size(),
+                            type:document.type(),
+                            public_id:document.public_id(),
+                            status:Dropzone.SUCCESS,
+                            accepted:true,
+                            url:document.url(),
+                            mock:true,
+                            index:i
+                        };
 
-                    @include('partials.dropzone', ['documentSource' => 'model.documents()'])
+                        dropzone.emit('addedfile', mockFile);
+                        dropzone.emit('complete', mockFile);
+                        if(document.preview_url()){
+                            dropzone.emit('thumbnail', mockFile, document.preview_url()||document.url());
+                        }
+                        else if(document.type()=='jpeg' || document.type()=='png' || document.type()=='svg'){
+                            dropzone.emit('thumbnail', mockFile, document.url());
+                        }
+                        dropzone.files.push(mockFile);
+                    }
+                }
                 @endif
             @endif
         });
@@ -483,26 +514,10 @@
                     return roundToTwo(self.amount() * self.exchange_rate()).toFixed(2);
                 },
                 write: function(value) {
-                    // When changing the converted amount we're updating
-                    // the exchange rate rather than change the amount
-                    self.exchange_rate(roundSignificant(NINJA.parseFloat(value) / self.amount()));
-                    //self.amount(roundToTwo(value / self.exchange_rate()));
+                    self.amount(roundToTwo(value / self.exchange_rate()));
                 }
             }, self);
 
-            self.updateExchangeRate = function() {
-                var fromCode = self.expenseCurrencyCode();
-                var toCode = self.invoiceCurrencyCode();
-                if (currencyMap[fromCode].exchange_rate && currencyMap[toCode].exchange_rate) {
-                    var rate = fx.convert(1, {
-                        from: fromCode,
-                        to: toCode,
-                    });
-                    self.exchange_rate(roundToFour(rate, true));
-                } else {
-                    self.exchange_rate(1);
-                }
-            }
 
             self.getCurrency = function(currencyId) {
                 return currencyMap[currencyId || self.account_currency_id()];
@@ -561,20 +576,51 @@
             }
         }
 
-        function addDocument(file) {
+        window.countUploadingDocuments = 0;
+
+        function handleDocumentAdded(file){
+            // open document when clicked
+            if (file.url) {
+                file.previewElement.addEventListener("click", function() {
+                    window.open(file.url, '_blank');
+                });
+            }
+            if(file.mock)return;
             file.index = model.documents().length;
             model.addDocument({name:file.name, size:file.size, type:file.type});
-    	}
+            window.countUploadingDocuments++;
+        }
 
-    	function addedDocument(file, response) {
-            model.documents()[file.index].update(response.document);
-    	}
-
-    	function deleteDocument(file) {
+        function handleDocumentRemoved(file){
             model.removeDocument(file.public_id);
-    	}
+            $.ajax({
+                url: '{{ '/documents/' }}' + file.public_id,
+                type: 'DELETE',
+                success: function(result) {
+                    // Do something with the result
+                }
+            });
+        }
 
-        function onInvoiceDocumentsChange() {
+        function handleDocumentUploaded(file, response){
+            window.countUploadingDocuments--;
+            file.public_id = response.document.public_id
+            model.documents()[file.index].update(response.document);
+            if(response.document.preview_url){
+                dropzone.emit('thumbnail', file, response.document.preview_url);
+            }
+        }
+
+        function handleDocumentCanceled() {
+            window.countUploadingDocuments--;
+        }
+
+        function handleDocumentError() {
+            window.countUploadingDocuments--;
+        }
+
+        function onInvoiceDocumentsChange()
+        {
             if (isStorageSupported()) {
                 var checked = $('#invoice_documents').is(':checked');
                 localStorage.setItem('last:invoice_documents', checked || '');

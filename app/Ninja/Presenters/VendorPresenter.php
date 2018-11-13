@@ -9,6 +9,6 @@ class VendorPresenter extends EntityPresenter
      */
     public function country()
     {
-        return $this->entity->country ? $this->entity->country->getName() : '';
+        return $this->entity->country ? $this->entity->country->name : '';
     }
 }

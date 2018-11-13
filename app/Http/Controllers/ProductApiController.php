@@ -56,7 +56,7 @@ class ProductApiController extends BaseAPIController
     {
         $products = Product::scope()
                         ->withTrashed()
-                        ->orderBy('updated_at', 'desc');
+                        ->orderBy('created_at', 'desc');
 
         return $this->listResponse($products);
     }

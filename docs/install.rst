@@ -3,36 +3,28 @@ Install
 
 Thanks for taking the time to setup Invoice Ninja.
 
-.. Note:: The applications requires PHP >= 7.0.0 and MySQL.
+.. Note:: The applications requires PHP >= 5.5.9 and MySQL.
 
 Detailed Guides
 ^^^^^^^^^^^^^^^
-
-- Ubuntu and Nginx: `websiteforstudents.com <https://websiteforstudents.com/install-invoiceninja-on-ubuntu-17-04-17-10-with-nginx-mariadb-and-php-support/>`_
 
 - Ubuntu and Apache: `technerdservices.com <http://blog.technerdservices.com/index.php/2015/04/techpop-how-to-install-invoice-ninja-on-ubuntu-14-04/>`_
 
 - Debian and Nginx: `rosehosting.com <https://www.rosehosting.com/blog/install-invoice-ninja-on-a-debian-7-vps/>`_
 
-- CentOS and Nginx: `thishosting.rocks <https://thishosting.rocks/how-to-install-invoice-ninja-on-centos/>`_
+- CentOS, Nginx, MariaDB and PHP 7: `thishosting.rocks <https://thishosting.rocks/how-to-install-invoice-ninja-on-centos/>`_
 
-- HostGator: `catsinja.com <http://blog.catsinja.com/2018/10/setup-invoice-ninja-on-hostgator-shared/>`_
+Automated Installers
+^^^^^^^^^^^^^^^^^^^^
 
-Automatic Install/Update
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-- Ansible: `github.com <https://github.com/invoiceninja/ansible-installer>`_
-
-- Dockerfile: `docker.com <https://hub.docker.com/r/invoiceninja/invoiceninja/>`_
-
-- Cloudron: `cloudron.io <https://cloudron.io/store/com.invoiceninja.cloudronapp.html>`_
+- Dockerfile: `github.com/invoiceninja/dockerfiles <https://github.com/invoiceninja/dockerfiles>`_
 
 - Softaculous: `softaculous.com <https://www.softaculous.com/apps/ecommerce/Invoice_Ninja>`_
 
 .. Tip:: You can use `github.com/turbo124/Plane2Ninja <https://github.com/turbo124/Plane2Ninja>`_ to migrate your data from InvoicePlane.
 
-Manual Install
-^^^^^^^^^^^^^^
+Steps to Install
+^^^^^^^^^^^^^^^^
 
 Step 1: Download the code
 """""""""""""""""""""""""
@@ -72,23 +64,11 @@ You’ll need to create a new database along with a user to access it. Most host
 Step 4: Configure the web server
 """"""""""""""""""""""""""""""""
 
-See the guides listed above for detailed information on configuring Apache or Nginx.
+Please see these guides for detailed information on configuring Apache or Nginx.
 
 Once you can access the site the initial setup screen will enable you to configure the database and email settings as well as create the initial admin user.
 
-.. Tip:: To remove public/ from the URL map the webroot to the /public folder, alternatively you can uncomment ``RewriteRule ^(.*)$ public/$1 [L]`` in the .htaccess file. There is more info `here <https://www.invoiceninja.com/forums/topic/clean-4-4-3-self-hosted-install-url-configuration-clarification/#post-14186>`_.
-
-Step 5: Configure the application
-"""""""""""""""""""""""""""""""""
-
-See the `details here <https://invoice-ninja.readthedocs.io/en/latest/configure.html>`_ for additional configuration options.
-
-Step 6: Enable auto updates
-"""""""""""""""""""""""""""
-
-Use this `shell script <https://pastebin.com/j657uv9A>`_ to automate the update process.
-
-You can run it as a daily cron to automatically keep your app up to date.
+.. Tip:: To remove public/ from the URL map the webroot to the /public folder, alternatively you can uncomment ``RewriteRule ^(.*)$ public/$1 [L]`` in the .htaccess file.
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
@@ -100,4 +80,4 @@ Troubleshooting
 - Running ``composer install`` and ``composer dump-autoload`` can sometimes help with composer problems.
 - If you’re using a subdomain. ie, invoice.mycompany.com You will need to add ``RewriteBase /`` to public/.htaccess otherwise it may fail with ``Request exceeded the limit of 10 internal redirects due to probable configuration error.`` messages in the logs.
 - Composer install error: ``Fatal error: Allowed memory size of...`` Try the following: ``php -d memory_limit=-1 /usr/local/bin/composer install``
-- PHP Fatal error: ``Call to undefined method Illuminate\Support\Facades\Session::get()`` try deleting bootstrap/cache/services.php. If the file doesn't exist the steps `here <https://stackoverflow.com/a/37266353/497368>`_ may help.
+- PHP Fatal error: ``Call to undefined method Illuminate\Support\Facades\Session::get()`` try deleting bootstrap/cache/services.php

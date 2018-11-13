@@ -133,9 +133,11 @@ class GatewayFeesCest
         }
 
         $I->click('Mark Sent');
-        $I->wait(3);
+        //$I->see($invoiceNumber);
+        //$I->see('Successfully created invoice');
 
         $clientId = $I->grabFromDatabase('contacts', 'client_id', ['email' => $clientEmail]);
+        //$clientId = $I->grabFromDatabase('clients', 'id', ['name' => $clientEmail]);
         $invoiceId = $I->grabFromDatabase('invoices', 'id', ['client_id' => $clientId, 'invoice_number' => $invoiceNumber]);
         $invitationKey = $I->grabFromDatabase('invitations', 'invitation_key', ['invoice_id' => $invoiceId]);
 
@@ -151,28 +153,25 @@ class GatewayFeesCest
 
         // check we correctly remove/add back the gateway fee
         $I->amOnPage('/payment/' . $invitationKey . '/credit_card');
-        $I->wait(3);
         $I->seeInDatabase('invoices', [
             'id' => $invoiceId,
             'amount' => ($amount + $fee),
         ]);
 
         $I->amOnPage('/payment/' . $invitationKey . '/bank_transfer');
-        $I->wait(3);
         $I->seeInDatabase('invoices', [
             'id' => $invoiceId,
             'amount' => ($amount + $fee * 2),
         ]);
 
         $I->amOnPage('/view/' . $invitationKey);
-        $I->wait(3);
         $I->seeInDatabase('invoices', [
             'id' => $invoiceId,
-            'amount' => ($amount + $fee * 2),
+            'amount' => ($amount),
         ]);
 
         $I->createOnlinePayment($I, $invitationKey);
-        $I->wait(3);
+
         $I->seeInDatabase('invoices', [
             'id' => $invoiceId,
             'amount' => ($amount + $fee),

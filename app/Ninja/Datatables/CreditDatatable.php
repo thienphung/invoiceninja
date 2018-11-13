@@ -17,50 +17,46 @@ class CreditDatatable extends EntityDatatable
             [
                 'client_name',
                 function ($model) {
-                    if (Auth::user()->can('view', [ENTITY_CLIENT, $model]))
-                        return $model->client_public_id ? link_to("clients/{$model->client_public_id}", Utils::getClientDisplayName($model))->toHtml() : '';
-                    else
+                    if (! Auth::user()->can('viewByOwner', [ENTITY_CLIENT, $model->client_user_id])) {
                         return Utils::getClientDisplayName($model);
+                    }
 
+                    return $model->client_public_id ? link_to("clients/{$model->client_public_id}", Utils::getClientDisplayName($model))->toHtml() : '';
                 },
                 ! $this->hideClient,
             ],
             [
                 'amount',
                 function ($model) {
-                    if(Auth::user()->can('view', [ENTITY_CLIENT, $model]))
-                        return Utils::formatMoney($model->amount, $model->currency_id, $model->country_id) . '<span '.Utils::getEntityRowClass($model).'/>';
+                    return Utils::formatMoney($model->amount, $model->currency_id, $model->country_id) . '<span '.Utils::getEntityRowClass($model).'/>';
                 },
             ],
             [
                 'balance',
                 function ($model) {
-                    if(Auth::user()->can('view', [ENTITY_CLIENT, $model]))
-                        return Utils::formatMoney($model->balance, $model->currency_id, $model->country_id);
+                    return Utils::formatMoney($model->balance, $model->currency_id, $model->country_id);
                 },
             ],
             [
                 'credit_date',
                 function ($model) {
-                    if (Auth::user()->can('view', [ENTITY_CREDIT, $model]))
-                        return link_to("credits/{$model->public_id}/edit", Utils::fromSqlDate($model->credit_date_sql))->toHtml();
-                    else
+                    if (! Auth::user()->can('viewByOwner', [ENTITY_CREDIT, $model->user_id])) {
                         return Utils::fromSqlDate($model->credit_date_sql);
+                    }
 
+                    return link_to("credits/{$model->public_id}/edit", Utils::fromSqlDate($model->credit_date_sql))->toHtml();
                 },
             ],
             [
                 'public_notes',
                 function ($model) {
-                    if (Auth::user()->can('view', [ENTITY_CREDIT, $model]))
-                        return e($model->public_notes);
+                    return $model->public_notes;
                 },
             ],
             [
                 'private_notes',
                 function ($model) {
-                    if (Auth::user()->can('view', [ENTITY_CREDIT, $model]))
-                        return e($model->private_notes);
+                    return $model->private_notes;
                 },
             ],
         ];
@@ -75,7 +71,7 @@ class CreditDatatable extends EntityDatatable
                     return URL::to("credits/{$model->public_id}/edit");
                 },
                 function ($model) {
-                    return Auth::user()->can('view', [ENTITY_CREDIT, $model]);
+                    return Auth::user()->can('editByOwner', [ENTITY_CREDIT, $model->user_id]);
                 },
             ],
             [

@@ -5,7 +5,6 @@ namespace App\Ninja\Presenters;
 use Carbon;
 use Domain;
 use App\Models\TaxRate;
-use App\Models\Account;
 use Laracasts\Presenter\Presenter;
 use stdClass;
 use Utils;
@@ -26,43 +25,9 @@ class AccountPresenter extends Presenter
     /**
      * @return string
      */
-    public function address()
-    {
-        $account = $this->entity;
-
-        $str = $account->address1 ?: '';
-
-        if ($account->address2 && $str) {
-            $str .= ', ';
-        }
-
-        $str .= $account->address2;
-
-        if ($account->getCityState() && $str) {
-            $str .= ' - ';
-        }
-
-        return $str . $account->getCityState();
-    }
-
-    /**
-     * @return string
-     */
     public function website()
     {
         return Utils::addHttp($this->entity->website);
-    }
-
-    /**
-     * @return string
-     */
-    public function taskRate()
-    {
-        if (floatval($this->entity->task_rate)) {
-            return Utils::roundSignificant($this->entity->task_rate);
-        } else {
-            return '';
-        }
     }
 
     /**
@@ -76,16 +41,9 @@ class AccountPresenter extends Presenter
         return $currency->code;
     }
 
-    public function clientPortalLink($subdomain = false)
+    public function clientPortalLink()
     {
-        $account = $this->entity;
-        $url = Domain::getLinkFromId($account->domain_id);
-
-        if ($subdomain && $account->subdomain) {
-            $url = Utils::replaceSubdomain($url, $account->subdomain);
-        }
-
-        return $url;
+        return Domain::getLinkFromId($this->entity->domain_id);
     }
 
     public function industry()
@@ -186,7 +144,7 @@ class AccountPresenter extends Presenter
             if ($rate->is_inclusive) {
                 $name .= ' - ' . trans('texts.inclusive');
             }
-            $options[($rate->is_inclusive ? '1 ' : '0 ') . $rate->rate . ' ' . $rate->name] = e($name);
+            $options[($rate->is_inclusive ? '1 ' : '0 ') . $rate->rate . ' ' . $rate->name] = $name;
         }
 
         return $options;
@@ -195,20 +153,20 @@ class AccountPresenter extends Presenter
     public function customTextFields()
     {
         $fields = [
-            'client1' => 'custom_client1',
-            'client1' => 'custom_client2',
-            'contact1' => 'custom_contact1',
-            'contact2' => 'custom_contact2',
-            'invoice_text1' => 'custom_invoice1',
-            'invoice_text2' => 'custom_invoice2',
-            'product1' => 'custom_product1',
-            'product2' => 'custom_product2',
+            'custom_client_label1' => 'custom_client1',
+            'custom_client_label2' => 'custom_client2',
+            'custom_contact_label1' => 'custom_contact1',
+            'custom_contact_label2' => 'custom_contact2',
+            'custom_invoice_text_label1' => 'custom_invoice1',
+            'custom_invoice_text_label2' => 'custom_invoice2',
+            'custom_invoice_item_label1' => 'custom_product1',
+            'custom_invoice_item_label2' => 'custom_product2',
         ];
         $data = [];
 
         foreach ($fields as $key => $val) {
-            if ($label = $this->customLabel($key)) {
-                $data[Utils::getCustomLabel($label)] = [
+            if ($this->$key) {
+                $data[$this->$key] = [
                     'value' => $val,
                     'name' => $val,
                 ];
@@ -236,37 +194,5 @@ class AccountPresenter extends Presenter
         }
 
         return $data;
-    }
-
-    public function clientLoginUrl()
-    {
-        $account = $this->entity;
-
-        if (Utils::isNinjaProd()) {
-            $url = 'https://';
-            $url .= $account->subdomain ?: 'app';
-            $url .= '.' . Domain::getDomainFromId($account->domain_id);
-        } else {
-            $url = trim(SITE_URL, '/');
-        }
-
-        $url .= '/client/login';
-
-        if (Utils::isNinja()) {
-            if (! $account->subdomain) {
-                $url .= '?account_key=' . $account->account_key;
-            }
-        } else {
-            if (Account::count() > 1) {
-                $url .= '?account_key=' . $account->account_key;
-            }
-        }
-
-        return $url;
-    }
-
-    public function customLabel($field)
-    {
-        return Utils::getCustomLabel($this->entity->customLabel($field));
     }
 }

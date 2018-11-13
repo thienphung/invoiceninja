@@ -83,14 +83,10 @@ class AuthService
             }
         } else {
             LookupUser::setServerByField('oauth_user_key', $providerId . '-' . $oauthUserId);
+
             if ($user = $this->accountRepo->findUserByOauth($providerId, $oauthUserId)) {
-                if ($user->google_2fa_secret) {
-                    session(['2fa:user:id' => $user->id]);
-                    return redirect('/validate_two_factor/' . $user->account->account_key);
-                } else {
-                    Auth::login($user);
-                    event(new UserLoggedIn());
-                }
+                Auth::login($user, true);
+                event(new UserLoggedIn());
             } else {
                 Session::flash('error', trans('texts.invalid_credentials'));
 

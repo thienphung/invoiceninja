@@ -11,7 +11,6 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laracasts\Presenter\PresentableTrait;
 use Session;
 use App\Models\LookupUser;
-use Illuminate\Notifications\Notifiable;
 
 /**
  * Class User.
@@ -20,7 +19,6 @@ class User extends Authenticatable
 {
     use PresentableTrait;
     use SoftDeletes;
-    use Notifiable;
 
     /**
      * @var string
@@ -61,17 +59,7 @@ class User extends Authenticatable
      *
      * @var array
      */
-    protected $hidden = [
-        'password',
-        'remember_token',
-        'confirmation_code',
-        'oauth_user_id',
-        'oauth_provider_id',
-        'google_2fa_secret',
-        'google_2fa_phone',
-        'remember_2fa_token',
-        'slack_webhook_url',
-    ];
+    protected $hidden = ['password', 'remember_token', 'confirmation_code'];
 
     /**
      * @var array
@@ -137,34 +125,6 @@ class User extends Authenticatable
     }
 
     /**
-     * @return mixed
-     */
-    public function isEnterprise()
-    {
-        return $this->account->isEnterprise();
-    }
-
-    /**
-     * @return mixed
-     */
-    public function isTrusted()
-    {
-        if (Utils::isSelfHost()) {
-            true;
-        }
-
-        return $this->account->isPro() && ! $this->account->isTrial();
-    }
-
-    /**
-     * @return mixed
-     */
-    public function hasActivePromo()
-    {
-        return $this->account->hasActivePromo();
-    }
-
-    /**
      * @param $feature
      *
      * @return mixed
@@ -200,7 +160,7 @@ class User extends Authenticatable
         } elseif ($this->email) {
             return $this->email;
         } else {
-            return trans('texts.guest');
+            return 'Guest';
         }
     }
 
@@ -328,51 +288,80 @@ class User extends Authenticatable
      */
     public function isEmailBeingChanged()
     {
-        return Utils::isNinjaProd() && $this->email != $this->getOriginal('email');
+        return Utils::isNinjaProd()
+                && $this->email != $this->getOriginal('email')
+                && $this->getOriginal('confirmed');
     }
 
+     /**
+      * Set the permissions attribute on the model.
+      *
+      * @param  mixed  $value
+      *
+      * @return $this
+      */
+     protected function setPermissionsAttribute($value)
+     {
+         if (empty($value)) {
+             $this->attributes['permissions'] = 0;
+         } else {
+             $bitmask = 0;
+             foreach ($value as $permission) {
+                 if (! $permission) {
+                     continue;
+                 }
+                 $bitmask = $bitmask | static::$all_permissions[$permission];
+             }
 
+             $this->attributes['permissions'] = $bitmask;
+         }
+
+         return $this;
+     }
+
+    /**
+     * Expands the value of the permissions attribute.
+     *
+     * @param mixed $value
+     *
+     * @return mixed
+     */
+    protected function getPermissionsAttribute($value)
+    {
+        $permissions = [];
+        foreach (static::$all_permissions as $permission => $bitmask) {
+            if (($value & $bitmask) == $bitmask) {
+                $permissions[$permission] = $permission;
+            }
+        }
+
+        return $permissions;
+    }
 
     /**
      * Checks to see if the user has the required permission.
      *
      * @param mixed $permission Either a single permission or an array of possible permissions
-     * @param mixed $requireAll - True to require all permissions, false to require only one
+     * @param bool True to require all permissions, false to require only one
+     * @param mixed $requireAll
      *
      * @return bool
      */
-
     public function hasPermission($permission, $requireAll = false)
     {
         if ($this->is_admin) {
             return true;
         } elseif (is_string($permission)) {
-
-            if( is_array(json_decode($this->permissions,1)) && in_array($permission, json_decode($this->permissions,1)) ) {
-                return true;
-            }
-
+            return ! empty($this->permissions[$permission]);
         } elseif (is_array($permission)) {
-
-            if ($requireAll)
-                return count(array_intersect($permission, json_decode($this->permissions,1))) == count( $permission );
-            else
-                return count(array_intersect($permission, json_decode($this->permissions,1))) > 0;
-
+            if ($requireAll) {
+                return count(array_diff($permission, $this->permissions)) == 0;
+            } else {
+                return count(array_intersect($permission, $this->permissions)) > 0;
+            }
         }
 
         return false;
-    }
-
-
-    public function viewModel($model, $entityType)
-    {
-        if($this->hasPermission('view_'.$entityType))
-            return true;
-        elseif($model->user_id == $this->id)
-            return true;
-        else
-            return false;
     }
 
     /**
@@ -389,13 +378,8 @@ class User extends Authenticatable
      * @return bool|mixed
      */
     public function filterId()
-    {   //todo permissions
-        return $this->hasPermission('view_all') ? false : $this->id;
-    }
-
-    public function filterIdByEntity($entity)
     {
-        return $this->hasPermission('view_' . $entity) ? false : $this->id;
+        return $this->hasPermission('view_all') ? false : $this->id;
     }
 
     public function caddAddUsers()
@@ -426,72 +410,6 @@ class User extends Authenticatable
     public function primaryAccount()
     {
         return $this->account->company->accounts->sortBy('id')->first();
-    }
-
-    public function sendPasswordResetNotification($token)
-    {
-        //$this->notify(new ResetPasswordNotification($token));
-        app('App\Ninja\Mailers\UserMailer')->sendPasswordReset($this, $token);
-    }
-
-    public function routeNotificationForSlack()
-    {
-        return $this->slack_webhook_url;
-    }
-
-    public function hasAcceptedLatestTerms()
-    {
-        if (! NINJA_TERMS_VERSION) {
-            return true;
-        }
-
-        return $this->accepted_terms_version == NINJA_TERMS_VERSION;
-    }
-
-    public function acceptLatestTerms($ip)
-    {
-        $this->accepted_terms_version = NINJA_TERMS_VERSION;
-        $this->accepted_terms_timestamp = date('Y-m-d H:i:s');
-        $this->accepted_terms_ip = $ip;
-
-        return $this;
-    }
-
-    public function ownsEntity($entity)
-    {
-        return $entity->user_id == $this->id;
-    }
-
-    public function shouldNotify($invoice)
-    {
-        if (! $this->email || ! $this->confirmed) {
-            return false;
-        }
-
-        if ($this->cannot('view', $invoice)) {
-            return false;
-        }
-
-        if ($this->only_notify_owned && ! $this->ownsEntity($invoice)) {
-            return false;
-        }
-
-        return true;
-    }
-
-    public function permissionsMap()
-    {
-        $data = [];
-        $permissions = json_decode($this->permissions);
-
-        if (! $permissions) {
-            return $data;
-        }
-
-        $keys = array_values((array) $permissions);
-        $values = array_fill(0, count($keys), true);
-
-        return array_combine($keys, $values);
     }
 }
 

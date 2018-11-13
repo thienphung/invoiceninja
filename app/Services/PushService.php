@@ -75,7 +75,7 @@ class PushService
     {
         $devices = json_decode($account->devices, true);
 
-        if (count((array) $devices) >= 1) {
+        if (count($devices) >= 1) {
             return true;
         } else {
             return false;

@@ -31,7 +31,6 @@ class UserTableSeeder extends Seeder
             'city' => $faker->city,
             'state' => $faker->state,
             'postal_code' => $faker->postcode,
-            'currency_id' => DEFAULT_CURRENCY,
             'country_id' => Country::all()->random()->id,
             'account_key' => strtolower(str_random(RANDOM_KEY_LENGTH)),
             'invoice_terms' => $faker->text($faker->numberBetween(50, 300)),
@@ -62,22 +61,6 @@ class UserTableSeeder extends Seeder
             'notify_sent' => false,
             'notify_paid' => false,
             'is_admin' => 1,
-            'accepted_terms_version' => NINJA_TERMS_VERSION,
-        ]);
-
-        $permissionsUser = User::create([
-            'first_name' => $faker->firstName,
-            'last_name' => $faker->lastName,
-            'email' => TEST_PERMISSIONS_USERNAME,
-            'username' => TEST_PERMISSIONS_USERNAME,
-            'account_id' => $account->id,
-            'password' => Hash::make(TEST_PASSWORD),
-            'registered' => true,
-            'confirmed' => true,
-            'notify_sent' => false,
-            'notify_paid' => false,
-            'is_admin' => 0,
-            'accepted_terms_version' => NINJA_TERMS_VERSION,
         ]);
 
         $client = Client::create([

@@ -5,7 +5,6 @@ namespace App\Ninja\Repositories;
 use App\Models\Project;
 use Auth;
 use DB;
-use Utils;
 
 class ProjectRepository extends BaseRepository
 {
@@ -36,11 +35,7 @@ class ProjectRepository extends BaseRepository
                     'projects.public_id',
                     'projects.user_id',
                     'projects.deleted_at',
-                    'projects.task_rate',
                     'projects.is_deleted',
-                    'projects.due_date',
-                    'projects.budgeted_hours',
-                    'projects.private_notes',
                     DB::raw("COALESCE(NULLIF(clients.name,''), NULLIF(CONCAT(contacts.first_name, ' ', contacts.last_name),''), NULLIF(contacts.email,'')) client_name"),
                     'clients.user_id as client_user_id',
                     'clients.public_id as client_public_id'
@@ -75,11 +70,6 @@ class ProjectRepository extends BaseRepository
         }
 
         $project->fill($input);
-
-        if (isset($input['due_date'])) {
-            $project->due_date = Utils::toSqlDate($input['due_date']);
-        }
-
         $project->save();
 
         return $project;

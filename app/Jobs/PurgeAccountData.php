@@ -8,7 +8,6 @@ use App\Models\LookupAccount;
 use Auth;
 use DB;
 use Exception;
-use App\Ninja\Mailers\UserMailer;
 
 class PurgeAccountData extends Job
 {
@@ -17,7 +16,7 @@ class PurgeAccountData extends Job
      *
      * @return void
      */
-    public function handle(UserMailer $userMailer)
+    public function handle()
     {
         $user = Auth::user();
         $account = $user->account;
@@ -50,12 +49,6 @@ class PurgeAccountData extends Job
             'vendors',
             'contacts',
             'clients',
-            'proposals',
-            'proposal_templates',
-            'proposal_snippets',
-            'proposal_categories',
-            'proposal_invitations',
-            'tax_rates',
         ];
 
         foreach ($tables as $table) {
@@ -68,8 +61,6 @@ class PurgeAccountData extends Job
         $account->client_number_counter = $account->client_number_counter > 0 ? 1 : 0;
         $account->save();
 
-        session([RECENTLY_VIEWED => false]);
-
         if (env('MULTI_DB_ENABLED')) {
             $current = config('database.default');
             config(['database.default' => DB_NINJA_LOOKUP]);
@@ -77,13 +68,8 @@ class PurgeAccountData extends Job
             $lookupAccount = LookupAccount::whereAccountKey($account->account_key)->firstOrFail();
             DB::table('lookup_contacts')->where('lookup_account_id', '=', $lookupAccount->id)->delete();
             DB::table('lookup_invitations')->where('lookup_account_id', '=', $lookupAccount->id)->delete();
-            DB::table('lookup_proposal_invitations')->where('lookup_account_id', '=', $lookupAccount->id)->delete();
 
             config(['database.default' => $current]);
         }
-
-        $subject = trans('texts.purge_successful');
-        $message = trans('texts.purge_details', ['account' => $user->account->getDisplayName()]);
-        $userMailer->sendMessage($user, $subject, $message);
     }
 }

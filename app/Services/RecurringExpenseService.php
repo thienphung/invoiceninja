@@ -73,7 +73,7 @@ class RecurringExpenseService extends BaseService
     {
         $query = $this->recurringExpenseRepo->find($search);
 
-        if (! Utils::hasPermission('view_expense')) {
+        if (! Utils::hasPermission('view_all')) {
             $query->where('recurring_expenses.user_id', '=', Auth::user()->id);
         }
 

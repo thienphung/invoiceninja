@@ -2,8 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\CreatePaymentTermRequest;
-use App\Http\Requests\UpdatePaymentTermRequest;
 use App\Models\PaymentTerm;
 use App\Services\PaymentTermService;
 use Auth;
@@ -86,7 +84,7 @@ class PaymentTermController extends BaseController
     /**
      * @return \Illuminate\Http\RedirectResponse
      */
-    public function store(CreatePaymentTermRequest $request)
+    public function store()
     {
         return $this->save();
     }
@@ -96,7 +94,7 @@ class PaymentTermController extends BaseController
      *
      * @return \Illuminate\Http\RedirectResponse
      */
-    public function update(UpdatePaymentTermRequest $request, $publicId)
+    public function update($publicId)
     {
         return $this->save($publicId);
     }

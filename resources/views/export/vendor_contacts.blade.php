@@ -1,5 +1,5 @@
 <tr>
-    <td>{{ trans('texts.vendor') }}</td>
+    <td>{{ trans('texts.client') }}</td>
     @if ($multiUser)
         <td>{{ trans('texts.user') }}</td>
     @endif

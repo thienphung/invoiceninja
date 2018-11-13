@@ -25,13 +25,6 @@
               {!! Former::textarea('contact_us_message')
                     ->label('message')
                     ->rows(10) !!}
-
-                @if (! Utils::isNinjaProd())
-                    {!! Former::checkbox('include_errors')->label(false)
-                        ->text(trans('texts.include_errors_help', [
-                            'link' => link_to('/errors', trans('texts.recent_errors'), ['target' => '_blank'])
-                        ])) !!}
-                @endif
           </div>
           <div class="response-div" style="display: none; font-size: 16px">
               {{ trans('texts.contact_us_response') }}
@@ -63,13 +56,9 @@
 
     $(function() {
         $('#contactUsModal').on('shown.bs.modal', function() {
-            var message = '';
-            @if (! Utils::isNinjaProd())
-                message = '\n\n' + "{{ Utils::getDebugInfo() }}";
-            @endif
             $('#contactUsModal .input-div').show();
             $('#contactUsModal .response-div').hide();
-            $("#contact_us_message").val(message).focus().selectRange(0, 0);
+            $("#contact_us_message").focus();
         })
     })
 

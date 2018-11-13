@@ -23,9 +23,8 @@
     @endif
 
     {!! Former::open($url)
-            ->addClass('col-lg-10 col-lg-offset-1 warn-on-exit task-form')
+            ->addClass('col-md-10 col-md-offset-1 warn-on-exit task-form')
             ->onsubmit('return onFormSubmit(event)')
-            ->autocomplete('off')
             ->method($method) !!}
 
     @if ($task)
@@ -42,7 +41,7 @@
         {!! Former::text('time_log') !!}
     </div>
 
-    <div class="row" onkeypress="formEnterClick(event)">
+    <div class="row">
         <div class="col-md-12">
 
             <div class="panel panel-default">
@@ -65,8 +64,6 @@
                         ->label(trans('texts.project')) !!}
             @endif
 
-            @include('partials/custom_fields', ['entityType' => ENTITY_TASK])
-
             {!! Former::textarea('description')->rows(4) !!}
 
             @if ($task)
@@ -75,22 +72,20 @@
                     <label for="simple-time" class="control-label col-lg-4 col-sm-4">
                     </label>
                     <div class="col-lg-8 col-sm-8" style="padding-top: 10px">
-                        @if ($task->getStartTime())
-                            <p>{{ $task->getStartTime() }} -
-                            @if (Auth::user()->account->timezone_id)
-                                {{ $timezone }}
-                            @else
-                                {!! link_to('/settings/localization?focus=timezone_id', $timezone, ['target' => '_blank']) !!}
-                            @endif
-                            <p/>
+                        <p>{{ $task->getStartTime() }} -
+                        @if (Auth::user()->account->timezone_id)
+                            {{ $timezone }}
+                        @else
+                            {!! link_to('/settings/localization?focus=timezone_id', $timezone, ['target' => '_blank']) !!}
                         @endif
+                        <p/>
 
                         @if ($task->hasPreviousDuration())
                             {{ trans('texts.duration') . ': ' . Utils::formatTime($task->getDuration()) }}<br/>
                         @endif
 
                         @if (!$task->is_running)
-                            <p>{!! Button::primary(trans('texts.edit_times'))->withAttributes(['onclick'=>'showTimeDetails()'])->small() !!}</p>
+                            <p>{!! Button::primary(trans('texts.edit_details'))->withAttributes(['onclick'=>'showTimeDetails()'])->small() !!}</p>
                         @endif
                     </div>
                 </div>
@@ -130,7 +125,7 @@
                                 </div>
                             </td>
                             <td style="padding: 0px 12px 12px 0 !important; width:100px">
-                                <input type="text" data-bind="value: duration.pretty, visible: !isEmpty()" class="form-control duration"></div>
+                                <input type="text" data-bind="value: duration.pretty, visible: !isEmpty()" class="form-control"></div>
                                 <a href="#" data-bind="click: function() { setNow(), $root.refresh() }, visible: isEmpty()">{{ trans('texts.set_now') }}</a>
                             </td>
                             <td style="width:30px" class="td-icon">
@@ -300,7 +295,7 @@
     }
 
     function onDeleteClick() {
-        if (confirm({!! json_encode(trans("texts.are_you_sure")) !!})) {
+        if (confirm('{!! trans("texts.are_you_sure") !!}')) {
             submitAction('delete');
         }
     }
@@ -495,20 +490,6 @@
         }
     }
 
-    function formEnterClick(event) {
-        if (event.keyCode === 13){
-            if (event.target.type == 'textarea') {
-                return;
-            }
-            event.preventDefault();
-            @if ($task && $task->trashed())
-                return;
-            @endif
-            submitAction('');
-            return false;
-        }
-    }
-
     $(function() {
         $('input[type=radio]').change(function() {
             onTaskTypeChange();
@@ -540,13 +521,6 @@
             model.showTimeOverlaps();
             showTimeDetails();
         @endif
-
-        $('input.duration').keydown(function(event){
-            if (event.keyCode == 13) {
-                event.preventDefault();
-                return false;
-            }
-        });
 
         // setup clients and project comboboxes
         var clientId = {{ $clientPublicId }};
@@ -592,7 +566,7 @@
           $clientSelect.val(clientId);
         }
 
-        $clientSelect.combobox({highlighter: comboboxHighlighter});
+        $clientSelect.combobox();
         $clientSelect.on('change', function(e) {
           var clientId = $('input[name=client]').val();
           var projectId = $('input[name=project_id]').val();
@@ -641,10 +615,8 @@
 
         if (projectId) {
            var project = projectMap[projectId];
-           if (project) {
-               setComboboxValue($('.project-select'), project.public_id, project.name);
-               $projectSelect.trigger('change');
-           }
+           setComboboxValue($('.project-select'), project.public_id, project.name);
+           $projectSelect.trigger('change');
         } else {
            $clientSelect.trigger('change');
         }

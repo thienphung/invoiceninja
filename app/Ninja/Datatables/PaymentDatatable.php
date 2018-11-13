@@ -25,36 +25,34 @@ class PaymentDatatable extends EntityDatatable
             [
                 'invoice_name',
                 function ($model) {
-                    if (Auth::user()->can('view', [ENTITY_INVOICE, $model->invoice_user_id]))
-                        return link_to("invoices/{$model->invoice_public_id}/edit", $model->invoice_number, ['class' => Utils::getEntityRowClass($model)])->toHtml();
-                    else
+                    if (! Auth::user()->can('viewByOwner', [ENTITY_INVOICE, $model->invoice_user_id])) {
                         return $model->invoice_number;
+                    }
 
-                    },
+                    return link_to("invoices/{$model->invoice_public_id}/edit", $model->invoice_number, ['class' => Utils::getEntityRowClass($model)])->toHtml();
+                },
             ],
             [
                 'client_name',
                 function ($model) {
-                    if(Auth::user()->can('view', [ENTITY_CLIENT, ENTITY_CLIENT]))
-                        return $model->client_public_id ? link_to("clients/{$model->client_public_id}", Utils::getClientDisplayName($model))->toHtml() : '';
-                    else
+                    if (! Auth::user()->can('viewByOwner', [ENTITY_CLIENT, $model->client_user_id])) {
                         return Utils::getClientDisplayName($model);
+                    }
 
-
+                    return $model->client_public_id ? link_to("clients/{$model->client_public_id}", Utils::getClientDisplayName($model))->toHtml() : '';
                 },
                 ! $this->hideClient,
             ],
             [
                 'transaction_reference',
                 function ($model) {
-                    $str = $model->transaction_reference ? e($model->transaction_reference) : '<i>'.trans('texts.manual_entry').'</i>';
-                    return $this->addNote($str, $model->private_notes);
+                    return $model->transaction_reference ? $model->transaction_reference : '<i>'.trans('texts.manual_entry').'</i>';
                 },
             ],
             [
                 'method',
                 function ($model) {
-                    return $model->account_gateway_id ? $model->gateway_name : ($model->payment_type ? trans('texts.payment_type_' . $model->payment_type) : '');
+                    return ($model->payment_type && ! $model->last4) ? trans('texts.payment_type_' . $model->payment_type) : ($model->account_gateway_id ? $model->gateway_name : '');
                 },
             ],
             [
@@ -69,8 +67,6 @@ class PaymentDatatable extends EntityDatatable
                             return '<img height="22" src="' . URL::to('/images/credit_cards/' . $code . '.png') . '" alt="' . htmlentities($card_type) . '">&nbsp; &bull;&bull;&bull;' . $model->last4 . ' ' . $expiration;
                         } elseif ($model->email) {
                             return $model->email;
-                        } elseif ($model->payment_type) {
-                            return trans('texts.payment_type_' . $model->payment_type);
                         }
                     } elseif ($model->last4) {
                         if ($model->bank_name) {
@@ -92,13 +88,7 @@ class PaymentDatatable extends EntityDatatable
             [
                 'amount',
                 function ($model) {
-                    $amount = Utils::formatMoney($model->amount, $model->currency_id, $model->country_id);
-
-                    if ($model->exchange_currency_id && $model->exchange_rate != 1) {
-                        $amount .= ' | ' . Utils::formatMoney($model->amount * $model->exchange_rate, $model->exchange_currency_id, $model->country_id);
-                    }
-
-                    return $amount;
+                    return Utils::formatMoney($model->amount, $model->currency_id, $model->country_id);
                 },
             ],
             [
@@ -129,7 +119,7 @@ class PaymentDatatable extends EntityDatatable
                     return URL::to("payments/{$model->public_id}/edit");
                 },
                 function ($model) {
-                    return Auth::user()->can('view', [ENTITY_PAYMENT, $model]);
+                    return Auth::user()->can('editByOwner', [ENTITY_PAYMENT, $model->user_id]);
                 },
             ],
             [
@@ -138,21 +128,20 @@ class PaymentDatatable extends EntityDatatable
                     return "javascript:submitForm_payment('email', {$model->public_id})";
                 },
                 function ($model) {
-                    return Auth::user()->can('edit', [ENTITY_PAYMENT, $model]);
+                    return Auth::user()->can('editByOwner', [ENTITY_PAYMENT, $model->user_id]);
                 },
             ],
             [
                 trans('texts.refund_payment'),
                 function ($model) {
-                    $max_refund = $model->amount - $model->refunded;
+                    $max_refund = number_format($model->amount - $model->refunded, 2);
                     $formatted = Utils::formatMoney($max_refund, $model->currency_id, $model->country_id);
                     $symbol = Utils::getFromCache($model->currency_id ? $model->currency_id : 1, 'currencies')->symbol;
-                    $local = in_array($model->gateway_id, [GATEWAY_BRAINTREE, GATEWAY_STRIPE, GATEWAY_WEPAY]) || ! $model->gateway_id ? 0 : 1;
 
-                    return "javascript:showRefundModal({$model->public_id}, '{$max_refund}', '{$formatted}', '{$symbol}', {$local})";
+                    return "javascript:showRefundModal({$model->public_id}, '{$max_refund}', '{$formatted}', '{$symbol}')";
                 },
                 function ($model) {
-                    return Auth::user()->can('edit', [ENTITY_PAYMENT, $model])
+                    return Auth::user()->can('editByOwner', [ENTITY_PAYMENT, $model->user_id])
                         && $model->payment_status_id >= PAYMENT_STATUS_COMPLETED
                         && $model->refunded < $model->amount;
                 },

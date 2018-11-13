@@ -75,11 +75,9 @@ class InvoiceDesign extends Eloquent
         $account = Auth::user()->account;
         $designs = Cache::get('invoiceDesigns');
 
-        $data = collect();
-
         foreach ($designs as $design) {
-            if ($design->id <= Auth::user()->maxInvoiceDesignId()) {
-                $data->push($design);
+            if ($design->id > Auth::user()->maxInvoiceDesignId()) {
+                $designs->pull($design->id);
             }
 
             $design->javascript = $design->pdfmake;
@@ -89,11 +87,11 @@ class InvoiceDesign extends Eloquent
                 if ($javascript = $account->getCustomDesign($design->id)) {
                     $design->javascript = $javascript;
                 } else {
-                    $data->forget($design->id - 1);
+                    $designs->forget($design->id - 1);
                 }
             }
         }
 
-        return $data;
+        return $designs;
     }
 }

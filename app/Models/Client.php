@@ -6,7 +6,6 @@ use Carbon;
 use DB;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Laracasts\Presenter\PresentableTrait;
-use App\Models\Traits\HasCustomMessages;
 use Utils;
 
 /**
@@ -16,7 +15,6 @@ class Client extends EntityModel
 {
     use PresentableTrait;
     use SoftDeletes;
-    use HasCustomMessages;
 
     /**
      * @var string
@@ -54,17 +52,56 @@ class Client extends EntityModel
         'invoice_number_counter',
         'quote_number_counter',
         'public_notes',
-        'task_rate',
-        'shipping_address1',
-        'shipping_address2',
-        'shipping_city',
-        'shipping_state',
-        'shipping_postal_code',
-        'shipping_country_id',
-        'show_tasks_in_portal',
-        'send_reminders',
-        'custom_messages',
     ];
+
+    /**
+     * @var string
+     */
+    public static $fieldName = 'name';
+    /**
+     * @var string
+     */
+    public static $fieldPhone = 'work_phone';
+    /**
+     * @var string
+     */
+    public static $fieldAddress1 = 'address1';
+    /**
+     * @var string
+     */
+    public static $fieldAddress2 = 'address2';
+    /**
+     * @var string
+     */
+    public static $fieldCity = 'city';
+    /**
+     * @var string
+     */
+    public static $fieldState = 'state';
+    /**
+     * @var string
+     */
+    public static $fieldPostalCode = 'postal_code';
+    /**
+     * @var string
+     */
+    public static $fieldNotes = 'notes';
+    /**
+     * @var string
+     */
+    public static $fieldCountry = 'country';
+    /**
+     * @var string
+     */
+    public static $fieldWebsite = 'website';
+    /**
+     * @var string
+     */
+    public static $fieldVatNumber = 'vat_number';
+    /**
+     * @var string
+     */
+    public static $fieldIdNumber = 'id_number';
 
     /**
      * @return array
@@ -72,28 +109,22 @@ class Client extends EntityModel
     public static function getImportColumns()
     {
         return [
-            'name',
-            'work_phone',
-            'address1',
-            'address2',
-            'city',
-            'state',
-            'postal_code',
-            'public_notes',
-            'private_notes',
-            'country',
-            'website',
-            'currency',
-            'vat_number',
-            'id_number',
-            'custom1',
-            'custom2',
-            'contact_first_name',
-            'contact_last_name',
-            'contact_phone',
-            'contact_email',
-            'contact_custom1',
-            'contact_custom2',
+            self::$fieldName,
+            self::$fieldPhone,
+            self::$fieldAddress1,
+            self::$fieldAddress2,
+            self::$fieldCity,
+            self::$fieldState,
+            self::$fieldPostalCode,
+            self::$fieldCountry,
+            self::$fieldNotes,
+            self::$fieldWebsite,
+            self::$fieldVatNumber,
+            self::$fieldIdNumber,
+            Contact::$fieldFirstName,
+            Contact::$fieldLastName,
+            Contact::$fieldPhone,
+            Contact::$fieldEmail,
         ];
     }
 
@@ -103,22 +134,19 @@ class Client extends EntityModel
     public static function getImportMap()
     {
         return [
-            'first' => 'contact_first_name',
-            'last^last4' => 'contact_last_name',
-            'email' => 'contact_email',
-            'work|office' => 'work_phone',
-            'mobile|phone' => 'contact_phone',
-            'name|organization|description^card' => 'name',
-            'apt|street2|address2|line2' => 'address2',
-            'street|address1|line1^avs' => 'address1',
+            'first' => 'first_name',
+            'last' => 'last_name',
+            'email' => 'email',
+            'mobile|phone' => 'phone',
+            'name|organization' => 'name',
+            'apt|street2|address2' => 'address2',
+            'street|address|address1' => 'address1',
             'city' => 'city',
             'state|province' => 'state',
-            'zip|postal|code^avs' => 'postal_code',
+            'zip|postal|code' => 'postal_code',
             'country' => 'country',
-            'public' => 'public_notes',
-            'private|note' => 'private_notes',
+            'note' => 'notes',
             'site|website' => 'website',
-            'currency' => 'currency',
             'vat' => 'vat_number',
             'number' => 'id_number',
         ];
@@ -191,14 +219,6 @@ class Client extends EntityModel
     /**
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
-    public function shipping_country()
-    {
-        return $this->belongsTo('App\Models\Country');
-    }
-
-    /**
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
-     */
     public function currency()
     {
         return $this->belongsTo('App\Models\Currency');
@@ -253,14 +273,6 @@ class Client extends EntityModel
     }
 
     /**
-     * @return mixed
-     */
-    public function activities()
-    {
-        return $this->hasMany('App\Models\Activity', 'client_id', 'id')->orderBy('id', 'desc');
-    }
-
-    /**
      * @param $data
      * @param bool $isPrimary
      *
@@ -270,10 +282,8 @@ class Client extends EntityModel
     {
         $publicId = isset($data['public_id']) ? $data['public_id'] : (isset($data['id']) ? $data['id'] : false);
 
-        // check if this client wasRecentlyCreated to ensure a new contact is
-        // always created even if the request includes a contact id
-        if (! $this->wasRecentlyCreated && $publicId && intval($publicId) > 0) {
-            $contact = Contact::scope($publicId)->whereClientId($this->id)->firstOrFail();
+        if ($publicId && $publicId != '-1') {
+            $contact = Contact::scope($publicId)->firstOrFail();
         } else {
             $contact = Contact::createNew();
             $contact->send_invoice = true;
@@ -348,17 +358,9 @@ class Client extends EntityModel
      */
     public function getPrimaryContact()
     {
-        if (! $this->relationLoaded('contacts')) {
-            $this->load('contacts');
-        }
-
-        foreach ($this->contacts as $contact) {
-            if ($contact->is_primary) {
-                return $contact;
-            }
-        }
-
-        return false;
+        return $this->contacts()
+                    ->whereIsPrimary(true)
+                    ->first();
     }
 
     /**
@@ -368,9 +370,15 @@ class Client extends EntityModel
     {
         if ($this->name) {
             return $this->name;
-        } else if ($contact = $this->getPrimaryContact()) {
-            return $contact->getDisplayName();
         }
+
+        if (! count($this->contacts)) {
+            return '';
+        }
+
+        $contact = $this->contacts[0];
+
+        return $contact->getDisplayName();
     }
 
     /**
@@ -402,7 +410,7 @@ class Client extends EntityModel
     /**
      * @return bool
      */
-    public function addressesMatch()
+    public function hasAddress()
     {
         $fields = [
             'address1',
@@ -414,32 +422,6 @@ class Client extends EntityModel
         ];
 
         foreach ($fields as $field) {
-            if ($this->$field != $this->{'shipping_' . $field}) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * @return bool
-     */
-    public function hasAddress($shipping = false)
-    {
-        $fields = [
-            'address1',
-            'address2',
-            'city',
-            'state',
-            'postal_code',
-            'country_id',
-        ];
-
-        foreach ($fields as $field) {
-            if ($shipping) {
-                $field = 'shipping_' . $field;
-            }
             if ($this->$field) {
                 return true;
             }
@@ -541,20 +523,6 @@ class Client extends EntityModel
 
         return $this->account->currency ? $this->account->currency->code : 'USD';
     }
-
-    public function getCountryCode()
-    {
-        if ($country = $this->country) {
-            return $country->iso_3166_2;
-        }
-
-        if (! $this->account) {
-            $this->load('account');
-        }
-
-        return $this->account->country ? $this->account->country->iso_3166_2 : 'US';
-    }
-
 
     /**
      * @param $isQuote

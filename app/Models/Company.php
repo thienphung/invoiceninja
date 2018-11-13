@@ -160,11 +160,6 @@ class Company extends Eloquent
     public function getPlanDetails($includeInactive = false, $includeTrial = true)
     {
         $account = $this->accounts()->first();
-
-        if (! $account) {
-            return false;
-        }
-
         return $account->getPlanDetails($includeInactive, $includeTrial);
     }
 
@@ -194,26 +189,6 @@ class Company extends Eloquent
         }
 
         return false;
-    }
-
-    public function applyDiscount($amount)
-    {
-        $this->discount = $amount;
-        $this->promo_expires = date_create()->modify('3 days')->format('Y-m-d');
-    }
-
-    public function applyFreeYear()
-    {
-        if ($this->plan_started && $this->plan_started != '0000-00-00') {
-            return;
-        }
-
-        $this->plan = PLAN_PRO;
-        $this->plan_term = PLAN_TERM_YEARLY;
-        $this->plan_price = PLAN_PRICE_PRO_MONTHLY;
-        $this->plan_started = date_create()->format('Y-m-d');
-        $this->plan_paid = date_create()->format('Y-m-d');
-        $this->plan_expires = date_create()->modify('1 year')->format('Y-m-d');
     }
 }
 

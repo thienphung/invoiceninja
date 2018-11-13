@@ -41,7 +41,7 @@
     var invoiceDesigns = {!! $invoiceDesigns !!};
     var invoiceFonts = {!! $invoiceFonts !!};
     var invoice = {!! json_encode($invoice) !!};
-    var sections = ['content', 'styles', 'defaultStyle', 'pageMargins', 'header', 'footer', 'background'];
+    var sections = ['content', 'styles', 'defaultStyle', 'pageMargins', 'header', 'footer'];
     var customDesign = origCustomDesign = {!! $customDesign ?: 'JSON.parse(invoiceDesigns[0].javascript);' !!};
 
     function getPDFString(cb, force) {
@@ -51,9 +51,10 @@
             remove_created_by:{{ Auth::user()->hasFeature(FEATURE_REMOVE_CREATED_BY) ? 'true' : 'false' }},
             invoice_settings:{{ Auth::user()->hasFeature(FEATURE_INVOICE_SETTINGS) ? 'true' : 'false' }}
         };
+      invoice.account.hide_quantity = {!! Auth::user()->account->hide_quantity ? 'true' : 'false' !!};
       invoice.account.hide_paid_to_date = {!! Auth::user()->account->hide_paid_to_date ? 'true' : 'false' !!};
-      NINJA.primaryColor = {!! json_encode(Auth::user()->account->primary_color) !!};
-      NINJA.secondaryColor = {!! json_encode(Auth::user()->account->secondary_color) !!};
+      NINJA.primaryColor = '{!! Auth::user()->account->primary_color !!}';
+      NINJA.secondaryColor = '{!! Auth::user()->account->secondary_color !!}';
       NINJA.fontSize = {!! Auth::user()->account->font_size !!};
       NINJA.headerFont = {!! json_encode(Auth::user()->account->getHeaderFontName()) !!};
       NINJA.bodyFont = {!! json_encode(Auth::user()->account->getBodyFontName()) !!};
@@ -162,6 +163,11 @@
         });
 
         refreshPDF(true);
+
+        @if (isset($sampleInvoice) && $sampleInvoice)
+            var sample = {!! $sampleInvoice->toJSON() !!}
+            $('#sampleData').show().html(prettyJson(sample));
+        @endif
     });
 
   </script>
@@ -185,12 +191,9 @@
             <li role="presentation"><a href="#margins" aria-controls="margins" role="tab" data-toggle="tab">{{ trans('texts.margins') }}</a></li>
             <li role="presentation"><a href="#header" aria-controls="header" role="tab" data-toggle="tab">{{ trans('texts.header') }}</a></li>
             <li role="presentation"><a href="#footer" aria-controls="footer" role="tab" data-toggle="tab">{{ trans('texts.footer') }}</a></li>
-			@if ($account->isEnterprise() && $account->background_image_id)
-				<li role="presentation"><a href="#background" aria-controls="footer" role="tab" data-toggle="tab">{{ trans('texts.background') }}</a></li>
-			@endif
         </ul>
     </div>
-    <div id="jsoneditor" style="width: 100%; height: 814px;"></div>
+    <div id="jsoneditor" style="width: 100%; height: 743px;"></div>
     <p>&nbsp;</p>
 
     <div>
@@ -212,7 +215,7 @@
       <script>
 
         function showHelp() {
-            $('#designHelpModal').modal('show');
+            $('#helpModal').modal('show');
         }
 
       </script>
@@ -220,31 +223,29 @@
       {!! Former::close() !!}
 
 
-    <div class="modal fade" id="designHelpModal" tabindex="-1" role="dialog" aria-labelledby="designHelpModalLabel" aria-hidden="true">
+    <div class="modal fade" id="helpModal" tabindex="-1" role="dialog" aria-labelledby="helpModalLabel" aria-hidden="true">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-            <h4 class="modal-title" id="designHelpModalLabel">{{ trans('texts.help') }}</h4>
+            <h4 class="modal-title" id="helpModalLabel">{{ trans('texts.help') }}</h4>
           </div>
 
 		  <div class="container" style="width: 100%; padding-bottom: 0px !important">
 		  <div class="panel panel-default">
 		  <div class="panel-body">
-	            {!! trans('texts.customize_help', [
-						'pdfmake_link' => link_to('http://pdfmake.org', 'pdfmake', ['target' => '_blank']),
-						'playground_link' => link_to('http://pdfmake.org/playground.html', trans('texts.playground'), ['target' => '_blank']),
-						'forum_link' => link_to('https://www.invoiceninja.com/forums/forum/support', trans('texts.support_forum'), ['target' => '_blank']),
-					]) !!}<br/>
+	            {!! trans('texts.customize_help') !!}<br/>
 
-				@include('partials/variables_help', ['entityType' => ENTITY_INVOICE, 'account' => $account])
+	            <pre id="sampleData" style="display:none;height:200px;padding-top:16px;"></pre>
+	            @if (empty($sampleInvoice))
+	                <div class="help-block">{{ trans('texts.create_invoice_for_sample') }}</div>
+	            @endif
           </div>
 	  	  </div>
   		  </div>
 
          <div class="modal-footer">
             <button type="button" class="btn btn-default" data-dismiss="modal">{{ trans('texts.close') }}</button>
-			<a class="btn btn-primary" href="{{ config('ninja.video_urls.custom_design') }}" target="_blank">{{ trans('texts.video') }}</a>
          </div>
 
         </div>
@@ -257,7 +258,7 @@
     <div class="col-md-6">
       <div id="pdf-error" class="alert alert-danger" style="display:none"></div>
 
-      @include('invoices.pdf', ['account' => Auth::user()->account, 'pdfHeight' => 930])
+      @include('invoices.pdf', ['account' => Auth::user()->account, 'pdfHeight' => 800])
 
     </div>
   </div>

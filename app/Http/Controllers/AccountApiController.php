@@ -6,7 +6,6 @@ use App\Events\UserSignedUp;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\UpdateAccountRequest;
 use App\Models\Account;
-use App\Models\User;
 use App\Ninja\OAuth\OAuth;
 use App\Ninja\Repositories\AccountRepository;
 use App\Ninja\Transformers\AccountTransformer;
@@ -16,7 +15,6 @@ use Auth;
 use Cache;
 use Exception;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Response;
 use Socialite;
 use Utils;
@@ -36,12 +34,7 @@ class AccountApiController extends BaseAPIController
     {
         $headers = Utils::getApiHeaders();
 
-        // Legacy support for Zapier
-        if (request()->v2) {
-            return $this->response(auth()->user()->email);
-        } else {
-            return Response::make(RESULT_SUCCESS, 200, $headers);
-        }
+        return Response::make(RESULT_SUCCESS, 200, $headers);
     }
 
     public function register(RegisterRequest $request)
@@ -53,7 +46,7 @@ class AccountApiController extends BaseAPIController
         $account = $this->accountRepo->create($request->first_name, $request->last_name, $request->email, $request->password);
         $user = $account->users()->first();
 
-        Auth::login($user);
+        Auth::login($user, true);
         event(new UserSignedUp());
 
         return $this->processLogin($request);
@@ -61,65 +54,24 @@ class AccountApiController extends BaseAPIController
 
     public function login(Request $request)
     {
-        $user = User::where('email', '=', $request->email)->first();
-
-        if ($user && $user->failed_logins >= MAX_FAILED_LOGINS) {
-            sleep(ERROR_DELAY);
-            return $this->errorResponse(['message' => 'Invalid credentials'], 401);
-        }
-
         if (Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
-            // TODO remove token_name check once legacy apps are deactivated
-            if ($user->google_2fa_secret && strpos($request->token_name, 'invoice-ninja-') !== false) {
-                $secret = \Crypt::decrypt($user->google_2fa_secret);
-                if (! $request->one_time_password) {
-                    return $this->errorResponse(['message' => 'OTP_REQUIRED'], 401);
-                } elseif (! \Google2FA::verifyKey($secret, $request->one_time_password)) {
-                    return $this->errorResponse(['message' => 'Invalid one time password'], 401);
-                }
-            }
-            if ($user && $user->failed_logins > 0) {
-                $user->failed_logins = 0;
-                $user->save();
-            }
             return $this->processLogin($request);
         } else {
-            error_log('login failed');
-            if ($user) {
-                $user->failed_logins = $user->failed_logins + 1;
-                $user->save();
-            }
             sleep(ERROR_DELAY);
+
             return $this->errorResponse(['message' => 'Invalid credentials'], 401);
         }
     }
 
-    public function refresh(Request $request)
-    {
-        return $this->processLogin($request, false);
-    }
-
-    private function processLogin(Request $request, $createToken = true)
+    private function processLogin(Request $request)
     {
         // Create a new token only if one does not already exist
         $user = Auth::user();
-        $account = $user->account;
-
-        if ($createToken) {
-            $this->accountRepo->createTokens($user, $request->token_name);
-        }
+        $this->accountRepo->createTokens($user, $request->token_name);
 
         $users = $this->accountRepo->findUsers($user, 'account.account_tokens');
-        $transformer = new UserAccountTransformer($account, $request->serializer, $request->token_name);
+        $transformer = new UserAccountTransformer($user->account, $request->serializer, $request->token_name);
         $data = $this->createCollection($users, $transformer, 'user_account');
-
-        if (request()->include_static) {
-            $data = [
-                'accounts' => $data,
-                'static' => Utils::getStaticData($account->getLocale()),
-                'version' => NINJA_VERSION,
-            ];
-        }
 
         return $this->response($data);
     }
@@ -138,18 +90,19 @@ class AccountApiController extends BaseAPIController
 
     public function getStaticData()
     {
-        return $this->response(Utils::getStaticData());
+        $data = [];
+
+        $cachedTables = unserialize(CACHED_TABLES);
+        foreach ($cachedTables as $name => $class) {
+            $data[$name] = Cache::get($name);
+        }
+
+        return $this->response($data);
     }
 
     public function getUserAccounts(Request $request)
     {
-        $user = Auth::user();
-
-        $users = $this->accountRepo->findUsers($user, 'account.account_tokens');
-        $transformer = new UserAccountTransformer($user->account, $request->serializer, $request->token_name);
-        $data = $this->createCollection($users, $transformer, 'user_account');
-
-        return $this->response($data);
+        return $this->processLogin($request);
     }
 
     public function update(UpdateAccountRequest $request)
@@ -171,7 +124,7 @@ class AccountApiController extends BaseAPIController
         $devices = json_decode($account->devices, true);
 
         for ($x = 0; $x < count($devices); $x++) {
-            if ($devices[$x]['email'] == $request->email) {
+            if ($devices[$x]['email'] == Auth::user()->username) {
                 $devices[$x]['token'] = $request->token; //update
                 $devices[$x]['device'] = $request->device;
                     $account->devices = json_encode($devices);
@@ -200,24 +153,6 @@ class AccountApiController extends BaseAPIController
         $account->save();
 
         return $this->response($newDevice);
-    }
-
-    public function removeDeviceToken(Request $request) {
-
-        $account = Auth::user()->account;
-
-        $devices = json_decode($account->devices, true);
-
-        for($x=0; $x<count($devices); $x++)
-        {
-            if($request->token == $devices[$x]['token'])
-                unset($devices[$x]);
-        }
-
-        $account->devices = json_encode(array_values($devices));
-        $account->save();
-
-        return $this->response(['success']);
     }
 
     public function updatePushNotifications(Request $request)
@@ -269,11 +204,4 @@ class AccountApiController extends BaseAPIController
             return $this->errorResponse(['message' => 'Invalid credentials'], 401);
 
     }
-
-    public function iosSubscriptionStatus() {
-
-        //stubbed for iOS callbacks
-
-    }
-
 }

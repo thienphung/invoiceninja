@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\InvoiceRequest;
-use App\Http\Requests\QuoteRequest;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\Country;
@@ -65,7 +64,7 @@ class QuoteController extends BaseController
         return $this->invoiceService->getDatatable($accountId, $clientPublicId, ENTITY_QUOTE, $search);
     }
 
-    public function create(QuoteRequest $request, $clientPublicId = 0)
+    public function create(InvoiceRequest $request, $clientPublicId = 0)
     {
         if (! Utils::hasFeature(FEATURE_QUOTES)) {
             return Redirect::to('/invoices/create');
@@ -98,18 +97,21 @@ class QuoteController extends BaseController
 
         return [
           'entityType' => ENTITY_QUOTE,
-          'account' => Auth::user()->account->load('country'),
+          'account' => $account,
           'products' => Product::scope()->orderBy('product_key')->get(),
           'taxRateOptions' => $account->present()->taxRateOptions,
+          'countries' => Cache::get('countries'),
           'clients' => Client::scope()->with('contacts', 'country')->orderBy('name')->get(),
           'taxRates' => TaxRate::scope()->orderBy('name')->get(),
+          'currencies' => Cache::get('currencies'),
           'sizes' => Cache::get('sizes'),
           'paymentTerms' => Cache::get('paymentTerms'),
+          'languages' => Cache::get('languages'),
+          'industries' => Cache::get('industries'),
           'invoiceDesigns' => InvoiceDesign::getDesigns(),
           'invoiceFonts' => Cache::get('fonts'),
           'invoiceLabels' => Auth::user()->account->getInvoiceLabels(),
           'isRecurring' => false,
-          'expenses' => collect(),
         ];
     }
 
@@ -131,13 +133,7 @@ class QuoteController extends BaseController
         $count = $this->invoiceService->bulk($ids, $action);
 
         if ($count > 0) {
-            if ($action == 'markSent') {
-                $key = 'updated_quote';
-            } elseif ($action == 'download') {
-                $key = 'downloaded_quote';
-            } else {
-                $key = "{$action}d_quote";
-            }
+            $key = $action == 'markSent' ? 'updated_quote' : "{$action}d_quote";
             $message = Utils::pluralize($key, $count);
             Session::flash('message', $message);
         }
@@ -149,24 +145,10 @@ class QuoteController extends BaseController
     {
         $invitation = Invitation::with('invoice.invoice_items', 'invoice.invitations')->where('invitation_key', '=', $invitationKey)->firstOrFail();
         $invoice = $invitation->invoice;
-        $account = $invoice->account;
 
-        if ($account->requiresAuthorization($invoice) && ! session('authorized:' . $invitation->invitation_key)) {
-            return redirect()->to('view/' . $invitation->invitation_key);
-        }
+        $invitationKey = $this->invoiceService->approveQuote($invoice, $invitation);
+        Session::flash('message', trans('texts.quote_is_approved'));
 
-        if ($invoice->due_date) {
-            $carbonDueDate = \Carbon::parse($invoice->due_date);
-            if (! $carbonDueDate->isToday() && ! $carbonDueDate->isFuture()) {
-                return redirect("view/{$invitationKey}")->withError(trans('texts.quote_has_expired'));
-            }
-        }
-
-        if ($invoiceInvitationKey = $this->invoiceService->approveQuote($invoice, $invitation)) {
-            Session::flash('message', trans('texts.quote_is_approved'));
-            return Redirect::to("view/{$invoiceInvitationKey}");
-        } else {
-            return Redirect::to("view/{$invitationKey}");
-        }
+        return Redirect::to("view/{$invitationKey}");
     }
 }

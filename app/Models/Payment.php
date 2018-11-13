@@ -23,10 +23,7 @@ class Payment extends EntityModel
      * @var array
      */
     protected $fillable = [
-        'transaction_reference',
         'private_notes',
-        'exchange_rate',
-        'exchange_currency_id',
     ];
 
     public static $statusClasses = [
@@ -92,7 +89,7 @@ class Payment extends EntityModel
      */
     public function contact()
     {
-        return $this->belongsTo('App\Models\Contact')->withTrashed();
+        return $this->belongsTo('App\Models\Contact');
     }
 
     /**
@@ -147,16 +144,6 @@ class Payment extends EntityModel
         $query->whereNotIn('payment_status_id', [PAYMENT_STATUS_VOIDED, PAYMENT_STATUS_FAILED]);
 
         return $query;
-    }
-
-    /**
-     * @param $query
-     *
-     * @return mixed
-     */
-    public function scopeDateRange($query, $startDate, $endDate)
-    {
-        return $query->whereBetween('payment_date', [$startDate, $endDate]);
     }
 
     /**
@@ -304,14 +291,6 @@ class Payment extends EntityModel
     public function canBeRefunded()
     {
         return $this->getCompletedAmount() > 0 && ($this->isCompleted() || $this->isPartiallyRefunded());
-    }
-
-    /**
-     * @return bool
-     */
-    public function isExchanged()
-    {
-        return $this->exchange_currency_id || $this->exchange_rate != 1;
     }
 
     /**

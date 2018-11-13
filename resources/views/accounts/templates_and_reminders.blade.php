@@ -26,13 +26,13 @@
 
     {!! Former::vertical_open()->addClass('warn-on-exit') !!}
 
-    @foreach (App\Models\AccountEmailSettings::$templates as $type)
+    @foreach ([ENTITY_INVOICE, ENTITY_QUOTE, ENTITY_PAYMENT, REMINDER1, REMINDER2, REMINDER3] as $type)
         @foreach (['subject', 'template'] as $field)
             {{ Former::populateField("email_{$field}_{$type}", $templates[$type][$field]) }}
         @endforeach
     @endforeach
 
-    @foreach ([TEMPLATE_REMINDER1, TEMPLATE_REMINDER2, TEMPLATE_REMINDER3] as $type)
+    @foreach ([REMINDER1, REMINDER2, REMINDER3] as $type)
         @foreach (['enable', 'num_days', 'direction', 'field'] as $field)
             {{ Former::populateField("{$field}_{$type}", $account->{"{$field}_{$type}"}) }}
         @endforeach
@@ -48,13 +48,11 @@
                     <ul class="nav nav-tabs" role="tablist" style="border: none">
                         <li role="presentation" class="active"><a href="#invoice" aria-controls="notes" role="tab" data-toggle="tab">{{ trans('texts.invoice_email') }}</a></li>
                         <li role="presentation"><a href="#quote" aria-controls="terms" role="tab" data-toggle="tab">{{ trans('texts.quote_email') }}</a></li>
-                        <li role="presentation"><a href="#proposal" aria-controls="terms" role="tab" data-toggle="tab">{{ trans('texts.proposal_email') }}</a></li>
                         <li role="presentation"><a href="#payment" aria-controls="footer" role="tab" data-toggle="tab">{{ trans('texts.payment_email') }}</a></li>
                     </ul>
                     <div class="tab-content">
                         @include('accounts.template', ['field' => 'invoice', 'active' => true])
                         @include('accounts.template', ['field' => 'quote'])
-                        @include('accounts.template', ['field' => 'proposal'])
                         @include('accounts.template', ['field' => 'payment'])
                     </div>
                 </div>
@@ -75,13 +73,11 @@
                         <li role="presentation" class="active"><a href="#reminder1" aria-controls="notes" role="tab" data-toggle="tab">{{ trans('texts.first_reminder') }}</a></li>
                         <li role="presentation"><a href="#reminder2" aria-controls="terms" role="tab" data-toggle="tab">{{ trans('texts.second_reminder') }}</a></li>
                         <li role="presentation"><a href="#reminder3" aria-controls="footer" role="tab" data-toggle="tab">{{ trans('texts.third_reminder') }}</a></li>
-                        <li role="presentation"><a href="#reminder4" aria-controls="footer" role="tab" data-toggle="tab">{{ trans('texts.endless_reminder') }}</a></li>
                     </ul>
                     <div class="tab-content">
-                        @include('accounts.template', ['field' => 'reminder1', 'number' => 1, 'isReminder' => true, 'active' => true])
-                        @include('accounts.template', ['field' => 'reminder2', 'number' => 2, 'isReminder' => true])
-                        @include('accounts.template', ['field' => 'reminder3', 'number' => 3, 'isReminder' => true])
-                        @include('accounts.template', ['field' => 'reminder4', 'number' => 4, 'isReminder' => true])
+                        @include('accounts.template', ['field' => 'reminder1', 'isReminder' => true, 'active' => true])
+                        @include('accounts.template', ['field' => 'reminder2', 'isReminder' => true])
+                        @include('accounts.template', ['field' => 'reminder3', 'isReminder' => true])
                     </div>
                 </div>
             </div>
@@ -152,7 +148,7 @@
 
     <script type="text/javascript">
 
-        var entityTypes = {!! json_encode(App\Models\AccountEmailSettings::$templates) !!};
+        var entityTypes = ['invoice', 'quote', 'payment', 'reminder1', 'reminder2', 'reminder3'];
         var stringTypes = ['subject', 'template'];
         var templates = {!! json_encode($defaultTemplates) !!};
         var account = {!! Auth::user()->account !!};
@@ -165,7 +161,8 @@
                     var idName = '#email_' + stringType + '_' + entityType;
                     var value = $(idName).val();
                     var previewName = '#' + entityType + '_' + stringType + '_preview';
-                    $(previewName).html(renderEmailTemplate(value, false, entityType));
+                    var isQuote = entityType == "{{ ENTITY_QUOTE }}";
+                    $(previewName).html(renderEmailTemplate(value, false, isQuote));
                 }
             }
         }
@@ -195,10 +192,22 @@
                 }
             }
 
+            for (var i=1; i<=3; i++) {
+                $('#enable_reminder' + i).bind('click', {id: i}, function(event) {
+                    enableReminder(event.data.id)
+                });
+                enableReminder(i);
+            }
+
             $('.show-when-ready').show();
 
             refreshPreview();
         });
+
+        function enableReminder(id) {
+            var checked = $('#enable_reminder' + id).is(':checked');
+            $('.enable-reminder' + id).attr('disabled', !checked)
+        }
 
         function setDirectionShown(field) {
             var val = $('#field_' + field).val();
@@ -238,6 +247,38 @@
             var fieldName = 'email_template_' + field;
             $('#' + fieldName).val(value);
             refreshPreview();
+        }
+
+        // https://gist.github.com/sente/1083506
+        function formatXml(xml) {
+            var formatted = '';
+            var reg = /(>)(<)(\/*)/g;
+            xml = xml.replace(reg, '$1\r\n$2$3');
+            var pad = 0;
+            jQuery.each(xml.split('\r\n'), function(index, node) {
+                var indent = 0;
+                if (node.match( /.+<\/\w[^>]*>$/ )) {
+                    indent = 0;
+                } else if (node.match( /^<\/\w/ )) {
+                    if (pad != 0) {
+                        pad -= 1;
+                    }
+                } else if (node.match( /^<\w[^>]*[^\/]>.*$/ )) {
+                    indent = 1;
+                } else {
+                    indent = 0;
+                }
+
+                var padding = '';
+                for (var i = 0; i < pad; i++) {
+                    padding += '  ';
+                }
+
+                formatted += padding + node + '\r\n';
+                pad += indent;
+            });
+
+            return formatted;
         }
 
     </script>

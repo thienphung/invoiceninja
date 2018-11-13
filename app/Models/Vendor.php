@@ -44,8 +44,6 @@ class Vendor extends EntityModel
         'currency_id',
         'website',
         'transaction_name',
-        'custom_value1',
-        'custom_value2',
     ];
 
     /**
@@ -100,10 +98,10 @@ class Vendor extends EntityModel
             self::$fieldPostalCode,
             self::$fieldCountry,
             self::$fieldNotes,
-            'contact_first_name',
-            'contact_last_name',
-            'contact_email',
-            'contact_phone',
+            VendorContact::$fieldFirstName,
+            VendorContact::$fieldLastName,
+            VendorContact::$fieldPhone,
+            VendorContact::$fieldEmail,
         ];
     }
 
@@ -113,12 +111,11 @@ class Vendor extends EntityModel
     public static function getImportMap()
     {
         return [
-            'first' => 'contact_first_name',
-            'last' => 'contact_last_name',
-            'email' => 'contact_email',
-            'mobile|phone' => 'contact_phone',
-            'work|office' => 'work_phone',
-            'name|organization|vendor' => 'name',
+            'first' => 'first_name',
+            'last' => 'last_name',
+            'email' => 'email',
+            'mobile|phone' => 'phone',
+            'name|organization' => 'name',
             'street2|address2' => 'address2',
             'street|address|address1' => 'address1',
             'city' => 'city',
@@ -217,10 +214,11 @@ class Vendor extends EntityModel
      */
     public function addVendorContact($data, $isPrimary = false)
     {
+        //$publicId = isset($data['public_id']) ? $data['public_id'] : false;
         $publicId = isset($data['public_id']) ? $data['public_id'] : (isset($data['id']) ? $data['id'] : false);
 
-        if (! $this->wasRecentlyCreated && $publicId && intval($publicId) > 0) {
-            $contact = VendorContact::scope($publicId)->whereVendorId($this->id)->firstOrFail();
+        if ($publicId && $publicId != '-1') {
+            $contact = VendorContact::scope($publicId)->firstOrFail();
         } else {
             $contact = VendorContact::createNew();
         }
@@ -338,7 +336,7 @@ class Vendor extends EntityModel
     public function getTotalExpenses()
     {
         return DB::table('expenses')
-                ->select('expense_currency_id', DB::raw('sum(expenses.amount + (expenses.amount * expenses.tax_rate1 / 100) + (expenses.amount * expenses.tax_rate2 / 100)) as amount'))
+                ->select('expense_currency_id', DB::raw('SUM(amount) as amount'))
                 ->whereVendorId($this->id)
                 ->whereIsDeleted(false)
                 ->groupBy('expense_currency_id')

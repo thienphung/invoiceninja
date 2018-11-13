@@ -106,13 +106,13 @@
                               <li>Go to the dashboard</li>
                               <li>List active and deleted tasks</li>
                               <li>Find &lt;client name&gt;</li>
-                              <li>Show me &lt;client name&gt;'s past due invoices</li>
+                              <li>Show me &lt;client name&gt;'s overdue invoices</li>
                               <li>New invoice for &lt;client name&gt;</li>
                               <li>Create payment for invoice &lt;invoice number&gt;</li>
                           </ul>
                       </p>
                       <p>
-                          {!! trans('texts.voice_commands_feedback', ['email' => HTML::mailto(env('CONTACT_EMAIL', CONTACT_EMAIL))]) !!}
+                          {!! trans('texts.voice_commands_feedback', ['email' => HTML::mailto(CONTACT_EMAIL)]) !!}
                       </p>
                   </div>
               </div>
@@ -124,9 +124,6 @@
 
       <div class="modal-footer">
         <button type="button" class="btn btn-default" data-dismiss="modal">{{ trans('texts.close') }}</button>
-        <a class="btn btn-primary" href="{{ config('ninja.knowledge_base_url') }}" target="_blank">{{ trans('texts.knowledge_base') }}</a>
-        <a class="btn btn-primary" href="{{ Utils::getDocsUrl(request()->path()) }}" target="_blank">{{ trans('texts.user_guide') }}</a>
-        <a class="btn btn-primary" href="{{ config('ninja.video_urls.all') }}" target="_blank">YouTube {{ trans('texts.videos') }}</a>
       </div>
     </div>
   </div>
@@ -161,12 +158,6 @@
         Mousetrap.bind('g d', function(e) {
             location.href = "{{ url('/dashboard') }}";
         });
-
-        /*
-        Mousetrap.bind('g r c', function(e) {
-            location.href = "{{ url('/reports/calendar') }}";
-        });
-        */
 
         Mousetrap.bind('g r', function(e) {
             location.href = "{{ url('/reports') }}";
@@ -238,7 +229,7 @@
             'g u m' => 'user_management',
         ] as $key => $val)
             Mousetrap.bind('{{ $key }}', function(e) {
-                location.href = "{{ url('/settings/' . $val) }}";
+                location.href = "{!! url('/settings/' . $val) !!}";
             });
         @endforeach
 

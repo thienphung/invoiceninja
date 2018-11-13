@@ -11,7 +11,7 @@ use Utils;
 /**
  * Class IntegrationController.
  */
-class IntegrationController extends BaseAPIController
+class IntegrationController extends Controller
 {
     /**
      * @return \Illuminate\Http\JsonResponse
@@ -24,8 +24,15 @@ class IntegrationController extends BaseAPIController
             return Response::json('Event is invalid', 500);
         }
 
-        $subscription = Subscription::createNew();
-        $subscription->event_id = $eventId;
+        $subscription = Subscription::where('account_id', '=', Auth::user()->account_id)
+                            ->where('event_id', '=', $eventId)->first();
+
+        if (! $subscription) {
+            $subscription = new Subscription();
+            $subscription->account_id = Auth::user()->account_id;
+            $subscription->event_id = $eventId;
+        }
+
         $subscription->target_url = trim(Input::get('target_url'));
         $subscription->save();
 
@@ -33,14 +40,6 @@ class IntegrationController extends BaseAPIController
             return Response::json('Failed to create subscription', 500);
         }
 
-        return Response::json(['id' => $subscription->public_id], 201);
-    }
-
-    public function unsubscribe($publicId)
-    {
-        $subscription = Subscription::scope($publicId)->firstOrFail();
-        $subscription->delete();
-
-        return $this->response(RESULT_SUCCESS);
+        return Response::json(['id' => $subscription->id], 201);
     }
 }

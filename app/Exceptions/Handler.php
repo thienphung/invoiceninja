@@ -2,8 +2,8 @@
 
 namespace App\Exceptions;
 
+use Crawler;
 use Exception;
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
@@ -15,7 +15,6 @@ use Redirect;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Utils;
-use Request;
 
 /**
  * Class Handler.
@@ -29,11 +28,10 @@ class Handler extends ExceptionHandler
      */
     protected $dontReport = [
         TokenMismatchException::class,
-        ModelNotFoundException::class,
-        ValidationException::class,
-        \Illuminate\Validation\ValidationException::class,
+        //ModelNotFoundException::class,
         //AuthorizationException::class,
         //HttpException::class,
+        //ValidationException::class,
     ];
 
     /**
@@ -51,29 +49,19 @@ class Handler extends ExceptionHandler
             return false;
         }
 
-        // if these classes don't exist the install is broken, maybe due to permissions
-        if (! class_exists('Utils') || ! class_exists('Crawler')) {
-            return parent::report($e);
-        }
-
-        if (\Crawler::isCrawler()) {
-            return false;
-        }
-
         // don't show these errors in the logs
         if ($e instanceof NotFoundHttpException) {
+            if (Crawler::isCrawler()) {
+                return false;
+            }
             // The logo can take a few seconds to get synced between servers
             // TODO: remove once we're using cloud storage for logos
             if (Utils::isNinja() && strpos(request()->url(), '/logo/') !== false) {
                 return false;
             }
             // Log 404s to a separate file
-            $errorStr = date('Y-m-d h:i:s') . ' ' . $e->getMessage() . ' URL:' . request()->url() . "\n" . json_encode(Utils::prepareErrorData('PHP')) . "\n\n";
-            if (config('app.log') == 'single') {
-                @file_put_contents(storage_path('logs/not-found.log'), $errorStr, FILE_APPEND);
-            } else {
-                Utils::logError('[not found] ' . $errorStr);
-            }
+            $errorStr = date('Y-m-d h:i:s') . ' ' . request()->url() . "\n" . json_encode(Utils::prepareErrorData('PHP')) . "\n\n";
+            @file_put_contents(storage_path('logs/not-found.log'), $errorStr, FILE_APPEND);
             return false;
         } elseif ($e instanceof HttpResponseException) {
             return false;
@@ -81,12 +69,8 @@ class Handler extends ExceptionHandler
 
         if (! Utils::isTravis()) {
             Utils::logError(Utils::getErrorString($e));
-            $stacktrace = date('Y-m-d h:i:s') . ' ' . $e->getMessage() . ': ' . $e->getTraceAsString() . "\n\n";
-            if (config('app.log') == 'single') {
-                @file_put_contents(storage_path('logs/stacktrace.log'), $stacktrace, FILE_APPEND);
-            } else {
-                Utils::logError('[stacktrace] ' . $stacktrace);
-            }
+            $stacktrace = date('Y-m-d h:i:s') . ' ' . $e->getTraceAsString() . "\n\n";
+            @file_put_contents(storage_path('logs/stacktrace.log'), $stacktrace, FILE_APPEND);
             return false;
         } else {
             return parent::report($e);
@@ -103,22 +87,8 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Exception $e)
     {
-        $value = Request::header('X-Ninja-Token');
-
         if ($e instanceof ModelNotFoundException) {
-
-            if( isset($value) && strlen($value) > 1 ){
-                $headers = \App\Libraries\Utils::getApiHeaders();
-                $response = json_encode(['message' => 'record does not exist'], JSON_PRETTY_PRINT);
-
-                return Response::make($response, 404, $headers);
-            }
-            else
-                return Redirect::to('/');
-        }
-
-        if (! class_exists('Utils')) {
-            return parent::render($request, $e);
+            return Redirect::to('/');
         }
 
         if ($e instanceof TokenMismatchException) {
@@ -168,7 +138,6 @@ class Handler extends ExceptionHandler
         if (Utils::isNinjaProd()
             && ! Utils::isDownForMaintenance()
             && ! ($e instanceof HttpResponseException)
-            && ! ($e instanceof \Illuminate\Validation\ValidationException)
             && ! ($e instanceof ValidationException)) {
             $data = [
                 'error' => get_class($e),
@@ -179,32 +148,5 @@ class Handler extends ExceptionHandler
         } else {
             return parent::render($request, $e);
         }
-    }
-
-    /**
-     * Convert an authentication exception into an unauthenticated response.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Illuminate\Auth\AuthenticationException  $exception
-     * @return \Illuminate\Http\Response
-     */
-    protected function unauthenticated($request, AuthenticationException $exception)
-    {
-        if ($request->expectsJson()) {
-            return response()->json(['error' => 'Unauthenticated.'], 401);
-        }
-
-        $guard = array_get($exception->guards(), 0);
-
-        switch ($guard) {
-            case 'client':
-                $url = '/client/login';
-                break;
-            default:
-                $url = '/login';
-                break;
-        }
-
-        return redirect()->guest($url);
     }
 }

@@ -61,24 +61,11 @@ class InvoiceApiController extends BaseAPIController
         $invoices = Invoice::scope()
                         ->withTrashed()
                         ->with('invoice_items', 'client')
-                        ->orderBy('updated_at', 'desc');
+                        ->orderBy('created_at', 'desc');
 
         // Filter by invoice number
         if ($invoiceNumber = Input::get('invoice_number')) {
             $invoices->whereInvoiceNumber($invoiceNumber);
-        }
-
-        // Fllter by status
-        if ($statusId = Input::get('status_id')) {
-            $invoices->where('invoice_status_id', '>=', $statusId);
-        }
-
-        if (request()->has('is_recurring')) {
-            $invoices->where('is_recurring', '=', request()->is_recurring);
-        }
-
-        if (request()->has('invoice_type_id')) {
-            $invoices->where('invoice_type_id', '=', request()->invoice_type_id);
         }
 
         return $this->listResponse($invoices);
@@ -181,11 +168,7 @@ class InvoiceApiController extends BaseAPIController
                 $client = $this->clientRepo->save($clientData);
             }
         } elseif (isset($data['client_id'])) {
-            $client = Client::scope($data['client_id'])->first();
-
-            if (! $client) {
-                return $this->errorResponse('Client not found', 404);
-            }
+            $client = Client::scope($data['client_id'])->firstOrFail();
         }
 
         $data = self::prepareData($data, $client);
@@ -210,20 +193,21 @@ class InvoiceApiController extends BaseAPIController
                 $payment = $this->paymentRepo->save([
                     'invoice_id' => $invoice->id,
                     'client_id' => $client->id,
-                    'amount' => round($data['paid'], 2),
+                    'amount' => $data['paid'],
                 ]);
             }
         }
 
         if ($isEmailInvoice) {
             if ($payment) {
-                $this->dispatch(new SendPaymentEmail($payment));
+                app('App\Ninja\Mailers\ContactMailer')->sendPaymentConfirmation($payment);
+                //$this->dispatch(new SendPaymentEmail($payment));
             } else {
                 if ($invoice->is_recurring && $recurringInvoice = $this->invoiceRepo->createRecurringInvoice($invoice)) {
                     $invoice = $recurringInvoice;
                 }
-                $reminder = isset($data['email_type']) ? $data['email_type'] : false;
-                $this->dispatch(new SendInvoiceEmail($invoice, auth()->user()->id, $reminder));
+                app('App\Ninja\Mailers\ContactMailer')->sendInvoice($invoice);
+                //$this->dispatch(new SendInvoiceEmail($invoice));
             }
         }
 
@@ -253,6 +237,8 @@ class InvoiceApiController extends BaseAPIController
             'po_number' => '',
             'invoice_design_id' => $account->invoice_design_id,
             'invoice_items' => [],
+            'custom_value1' => 0,
+            'custom_value2' => 0,
             'custom_taxes1' => false,
             'custom_taxes2' => false,
             'tax_name1' => '',
@@ -284,7 +270,7 @@ class InvoiceApiController extends BaseAPIController
         }
 
         // initialize the line items
-        if (! isset($data['invoice_items']) && (isset($data['product_key']) || isset($data['cost']) || isset($data['notes']) || isset($data['qty']))) {
+        if (isset($data['product_key']) || isset($data['cost']) || isset($data['notes']) || isset($data['qty'])) {
             $data['invoice_items'] = [self::prepareItem($data)];
             // make sure the tax isn't applied twice (for the invoice and the line item)
             unset($data['invoice_items'][0]['tax_name1']);
@@ -293,16 +279,6 @@ class InvoiceApiController extends BaseAPIController
             unset($data['invoice_items'][0]['tax_rate2']);
         } else {
             foreach ($data['invoice_items'] as $index => $item) {
-                // check for multiple products
-                if ($productKey = array_get($item, 'product_key')) {
-                    $parts = explode(',', $productKey);
-                    if (count($parts) > 1 && Product::findProductByKey($parts[0])) {
-                        foreach ($parts as $index => $productKey) {
-                            $data['invoice_items'][$index] = self::prepareItem(['product_key' => $productKey]);
-                        }
-                        break;
-                    }
-                }
                 $data['invoice_items'][$index] = self::prepareItem($item);
             }
         }
@@ -313,23 +289,14 @@ class InvoiceApiController extends BaseAPIController
     private function prepareItem($item)
     {
         // if only the product key is set we'll load the cost and notes
-        if (! empty($item['product_key'])) {
+        if (! empty($item['product_key']) && empty($item['cost']) && empty($item['notes'])) {
             $product = Product::findProductByKey($item['product_key']);
             if ($product) {
-                $fields = [
-                    'cost',
-                    'notes',
-                    'custom_value1',
-                    'custom_value2',
-                    'tax_name1',
-                    'tax_rate1',
-                    'tax_name2',
-                    'tax_rate2',
-                ];
-                foreach ($fields as $field) {
-                    if (! isset($item[$field])) {
-                        $item[$field] = $product->$field;
-                    }
+                if (empty($item['cost'])) {
+                    $item['cost'] = $product->cost;
+                }
+                if (empty($item['notes'])) {
+                    $item['notes'] = $product->notes;
                 }
             }
         }
@@ -347,13 +314,6 @@ class InvoiceApiController extends BaseAPIController
             }
         }
 
-        // Workaround to support line item taxes w/Zapier
-        foreach (['tax_rate1', 'tax_name1', 'tax_rate2', 'tax_name2'] as $field) {
-            if (isset($item['item_' . $field])) {
-                $item[$field] = $item['item_' . $field];
-            }
-        }
-
         return $item;
     }
 
@@ -365,16 +325,11 @@ class InvoiceApiController extends BaseAPIController
             $invoice = $recurringInvoice;
         }
 
-        $reminder = request()->reminder;
-        $template = request()->template;
+        //$this->dispatch(new SendInvoiceEmail($invoice));
+        $result = app('App\Ninja\Mailers\ContactMailer')->sendInvoice($invoice);
 
-        if (config('queue.default') !== 'sync') {
-            $this->dispatch(new SendInvoiceEmail($invoice, auth()->user()->id, $reminder, $template));
-        } else {
-            $result = app('App\Ninja\Mailers\ContactMailer')->sendInvoice($invoice, $reminder, $template);
-            if ($result !== true) {
-                return $this->errorResponse($result, 500);
-            }
+        if ($result !== true) {
+            return $this->errorResponse($result, 500);
         }
 
         $headers = Utils::getApiHeaders();
@@ -428,7 +383,6 @@ class InvoiceApiController extends BaseAPIController
         $this->invoiceService->save($data, $request->entity());
 
         $invoice = Invoice::scope($publicId)
-                        ->withTrashed()
                         ->with('client', 'invoice_items', 'invitations')
                         ->firstOrFail();
 
@@ -470,16 +424,6 @@ class InvoiceApiController extends BaseAPIController
     {
         $invoice = $request->entity();
 
-        if ($invoice->is_deleted) {
-            abort(404);
-        }
-
-        $pdfString = $invoice->getPDFString();
-
-        if ($pdfString) {
-            return $this->fileReponse($invoice->getFileName(), $pdfString);
-        } else {
-            abort(404);
-        }
+        return $this->fileReponse($invoice->getFileName(), $invoice->getPDFString());
     }
 }

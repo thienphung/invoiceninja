@@ -31,16 +31,12 @@ class LanguageSeeder extends Seeder
             ['name' => 'Croatian', 'locale' => 'hr'],
             ['name' => 'Albanian', 'locale' => 'sq'],
             ['name' => 'Greek', 'locale' => 'el'],
-            ['name' => 'English - United Kingdom', 'locale' => 'en_GB'],
+            ['name' => 'English - United Kingdom', 'locale' => 'en_UK'],
             ['name' => 'Portuguese - Portugal', 'locale' => 'pt_PT'],
             ['name' => 'Slovenian', 'locale' => 'sl'],
             ['name' => 'Finnish', 'locale' => 'fi'],
             ['name' => 'Romanian', 'locale' => 'ro'],
             ['name' => 'Turkish - Turkey', 'locale' => 'tr_TR'],
-            ['name' => 'Thai', 'locale' => 'th'],
-            ['name' => 'Macedonian', 'locale' => 'mk_MK'],
-            ['name' => 'Chinese - Taiwan', 'locale' => 'zh_TW'],
-            ['name' => 'English - Australia', 'locale' => 'en_AU'],
         ];
 
         foreach ($languages as $language) {

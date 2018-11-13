@@ -24,7 +24,6 @@ class Document extends EntityModel
     protected $fillable = [
         'invoice_id',
         'expense_id',
-        'is_default',
     ];
 
     /**
@@ -237,23 +236,6 @@ class Document extends EntityModel
     /**
      * @return mixed
      */
-    public function getRawCached()
-    {
-        $key = 'image:' . $this->path;
-
-        if ($image = cache($key)) {
-            // do nothing
-        } else {
-            $image = $this->getRaw();
-            cache([$key => $image], 120);
-        }
-
-        return $image;
-    }
-
-    /**
-     * @return mixed
-     */
     public function getStream()
     {
         $disk = $this->getDisk();
@@ -287,15 +269,6 @@ class Document extends EntityModel
     public function getClientUrl($invitation)
     {
         return url('client/documents/'.$invitation->invitation_key.'/'.$this->public_id.'/'.$this->name);
-    }
-
-    public function getProposalUrl()
-    {
-        if (! $this->is_proposal || ! $this->document_key) {
-            return '';
-        }
-
-        return url('proposal/image/'. $this->account->account_key . '/' . $this->document_key . '/' . $this->name);
     }
 
     /**
@@ -372,11 +345,6 @@ class Document extends EntityModel
         $document->height = $this->height;
 
         return $document;
-    }
-
-    public function scopeProposalImages($query)
-    {
-        return $query->whereIsProposal(1);
     }
 }
 

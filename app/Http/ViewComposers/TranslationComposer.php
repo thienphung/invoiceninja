@@ -2,7 +2,6 @@
 
 namespace App\Http\ViewComposers;
 
-use Str;
 use Cache;
 use Illuminate\View\View;
 
@@ -44,12 +43,6 @@ class TranslationComposer
             $lang->name = trans('texts.lang_'.$lang->name);
         })->sortBy(function ($lang) {
             return $lang->name;
-        }));
-
-        $view->with('currencies', Cache::get('currencies')->each(function ($currency) {
-            $currency->name = trans('texts.currency_' . Str::slug($currency->name, '_'));
-        })->sortBy(function ($currency) {
-            return $currency->name;
         }));
     }
 }

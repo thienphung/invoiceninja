@@ -63,9 +63,6 @@ class PaymentRepository extends BaseRepository
                         'payments.email',
                         'payments.routing_number',
                         'payments.bank_name',
-                        'payments.private_notes',
-                        'payments.exchange_rate',
-                        'payments.exchange_currency_id',
                         'invoices.is_deleted as invoice_is_deleted',
                         'gateways.name as gateway_name',
                         'gateways.id as gateway_id',
@@ -189,12 +186,16 @@ class PaymentRepository extends BaseRepository
             $payment->payment_date = date('Y-m-d');
         }
 
-        $payment->fill($input);
+        if (isset($input['transaction_reference'])) {
+            $payment->transaction_reference = trim($input['transaction_reference']);
+        }
+        if (isset($input['private_notes'])) {
+            $payment->private_notes = trim($input['private_notes']);
+        }
 
         if (! $publicId) {
             $clientId = $input['client_id'];
-            $amount = round(Utils::parseFloat($input['amount']), 2);
-            $amount = min($amount, MAX_INVOICE_AMOUNT);
+            $amount = Utils::parseFloat($input['amount']);
 
             if ($paymentTypeId == PAYMENT_TYPE_CREDIT) {
                 $credits = Credit::scope()->where('client_id', '=', $clientId)

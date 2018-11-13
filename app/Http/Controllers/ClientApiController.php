@@ -43,7 +43,7 @@ class ClientApiController extends BaseAPIController
     public function index()
     {
         $clients = Client::scope()
-            ->orderBy('updated_at', 'desc')
+            ->orderBy('created_at', 'desc')
             ->withTrashed();
 
         if ($email = Input::get('email')) {
@@ -82,13 +82,7 @@ class ClientApiController extends BaseAPIController
      */
     public function show(ClientRequest $request)
     {
-        $client = $request->entity();
-
-        if (strpos(request()->include, 'activities') !== false) {
-            $client->load('activities.client.contacts', 'activities.user', 'activities.invoice', 'activities.payment', 'activities.credit', 'activities.account', 'activities.task', 'activities.expense', 'activities.contact');
-        }
-
-        return $this->itemResponse($client);
+        return $this->itemResponse($request->entity());
     }
 
     /**

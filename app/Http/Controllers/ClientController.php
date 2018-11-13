@@ -5,14 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ClientRequest;
 use App\Http\Requests\CreateClientRequest;
 use App\Http\Requests\UpdateClientRequest;
-use App\Jobs\LoadPostmarkHistory;
-use App\Jobs\ReactivatePostmarkEmail;
-use App\Jobs\Client\GenerateStatementData;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\Credit;
 use App\Models\Invoice;
-use App\Models\Expense;
 use App\Models\Task;
 use App\Ninja\Datatables\ClientDatatable;
 use App\Ninja\Repositories\ClientRepository;
@@ -58,7 +54,7 @@ class ClientController extends BaseController
     public function getDatatable()
     {
         $search = Input::get('sSearch');
-        $userId = Auth::user()->filterIdByEntity(ENTITY_CLIENT);
+        $userId = Auth::user()->filterId();
 
         return $this->clientService->getDatatable($search, $userId);
     }
@@ -86,12 +82,8 @@ class ClientController extends BaseController
      */
     public function show(ClientRequest $request)
     {
-
         $client = $request->entity();
         $user = Auth::user();
-        $account = $user->account;
-
-        //$user->can('view', [ENTITY_CLIENT, $client]);
 
         $actionLinks = [];
         if ($user->can('create', ENTITY_INVOICE)) {
@@ -120,22 +112,20 @@ class ClientController extends BaseController
         }
 
         if ($user->can('create', ENTITY_EXPENSE)) {
-            $actionLinks[] = ['label' => trans('texts.enter_expense'), 'url' => URL::to('/expenses/create/'.$client->public_id)];
+            $actionLinks[] = ['label' => trans('texts.enter_expense'), 'url' => URL::to('/expenses/create/0/'.$client->public_id)];
         }
 
         $token = $client->getGatewayToken();
 
         $data = [
-            'account' => $account,
             'actionLinks' => $actionLinks,
             'showBreadcrumbs' => false,
             'client' => $client,
             'credit' => $client->getTotalCredit(),
             'title' => trans('texts.view_client'),
-            'hasRecurringInvoices' => $account->isModuleEnabled(ENTITY_RECURRING_INVOICE) && Invoice::scope()->recurring()->withArchived()->whereClientId($client->id)->count() > 0,
-            'hasQuotes' => $account->isModuleEnabled(ENTITY_QUOTE) && Invoice::scope()->quotes()->withArchived()->whereClientId($client->id)->count() > 0,
-            'hasTasks' => $account->isModuleEnabled(ENTITY_TASK) && Task::scope()->withArchived()->whereClientId($client->id)->count() > 0,
-            'hasExpenses' => $account->isModuleEnabled(ENTITY_EXPENSE) && Expense::scope()->withArchived()->whereClientId($client->id)->count() > 0,
+            'hasRecurringInvoices' => Invoice::scope()->recurring()->withArchived()->whereClientId($client->id)->count() > 0,
+            'hasQuotes' => Invoice::scope()->quotes()->withArchived()->whereClientId($client->id)->count() > 0,
+            'hasTasks' => Task::scope()->withArchived()->whereClientId($client->id)->count() > 0,
             'gatewayLink' => $token ? $token->gatewayLink() : false,
             'gatewayName' => $token ? $token->gatewayName() : false,
         ];
@@ -150,8 +140,6 @@ class ClientController extends BaseController
      */
     public function create(ClientRequest $request)
     {
-        //Auth::user()->can('create', ENTITY_CLIENT);
-
         if (Client::scope()->withTrashed()->count() > Auth::user()->getMaxNumClients()) {
             return View::make('error', ['hideHeader' => true, 'error' => "Sorry, you've exceeded the limit of ".Auth::user()->getMaxNumClients().' clients']);
         }
@@ -177,7 +165,6 @@ class ClientController extends BaseController
      */
     public function edit(ClientRequest $request)
     {
-
         $client = $request->entity();
 
         $data = [
@@ -204,8 +191,9 @@ class ClientController extends BaseController
             'data' => Input::old('data'),
             'account' => Auth::user()->account,
             'sizes' => Cache::get('sizes'),
-            'customLabel1' => Auth::user()->account->customLabel('client1'),
-            'customLabel2' => Auth::user()->account->customLabel('client2'),
+            'currencies' => Cache::get('currencies'),
+            'customLabel1' => Auth::user()->account->custom_client_label1,
+            'customLabel2' => Auth::user()->account->custom_client_label2,
         ];
     }
 
@@ -229,62 +217,35 @@ class ClientController extends BaseController
     {
         $action = Input::get('action');
         $ids = Input::get('public_id') ? Input::get('public_id') : Input::get('ids');
-
-        if ($action == 'purge' && ! auth()->user()->is_admin) {
-            return redirect('dashboard')->withError(trans('texts.not_authorized'));
-        }
-
         $count = $this->clientService->bulk($ids, $action);
 
         $message = Utils::pluralize($action.'d_client', $count);
         Session::flash('message', $message);
 
-        if ($action == 'purge') {
-            return redirect('dashboard')->withMessage($message);
-        } else {
-            return $this->returnBulk(ENTITY_CLIENT, $action, $ids);
-        }
+        return $this->returnBulk(ENTITY_CLIENT, $action, $ids);
     }
 
-    public function statement($clientPublicId)
+    public function statement()
     {
-        $statusId = request()->status_id;
-        $startDate = request()->start_date;
-        $endDate = request()->end_date;
         $account = Auth::user()->account;
         $client = Client::scope(request()->client_id)->with('contacts')->firstOrFail();
-
-        if (! $startDate) {
-            $startDate = Utils::today(false)->modify('-6 month')->format('Y-m-d');
-            $endDate = Utils::today(false)->format('Y-m-d');
-        }
-
-        if (request()->json) {
-            return dispatch(new GenerateStatementData($client, request()->all()));
-        }
+        $invoice = $account->createInvoice(ENTITY_INVOICE);
+        $invoice->client = $client;
+        $invoice->date_format = $account->date_format ? $account->date_format->format_moment : 'MMM D, YYYY';
+        $invoice->invoice_items = Invoice::scope()
+            ->with(['client'])
+            ->whereClientId($client->id)
+            ->invoices()
+            ->whereIsPublic(true)
+            ->where('balance', '>', 0)
+            ->get();
 
         $data = [
             'showBreadcrumbs' => false,
             'client' => $client,
-            'account' => $account,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
+            'invoice' => $invoice,
         ];
 
         return view('clients.statement', $data);
-    }
-
-    public function getEmailHistory()
-    {
-        $history = dispatch(new LoadPostmarkHistory(request()->email));
-
-        return response()->json($history);
-    }
-
-    public function reactivateEmail()
-    {
-        $result = dispatch(new ReactivatePostmarkEmail(request()->bounce_id));
-
-        return response()->json($result);
     }
 }

@@ -173,7 +173,4 @@ return [
     'register' => [
         'translations' => true,
     ],
-    'relations' => [
-        //  all dynamic relations registered from modules are added here
-    ],
 ];

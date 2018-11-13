@@ -36,13 +36,8 @@ class StartupCheck
         // Set up trusted X-Forwarded-Proto proxies
         // TRUSTED_PROXIES accepts a comma delimited list of subnets
         // ie, TRUSTED_PROXIES='10.0.0.0/8,172.16.0.0/12,192.168.0.0/16'
-        // set TRUSTED_PROXIES=* if you want to trust every proxy.
         if (isset($_ENV['TRUSTED_PROXIES'])) {
-            if (env('TRUSTED_PROXIES') == '*') {
-                $request->setTrustedProxies(['127.0.0.1', $request->server->get('REMOTE_ADDR')]);
-            } else{
-                $request->setTrustedProxies(array_map('trim', explode(',', env('TRUSTED_PROXIES'))));
-            }
+            $request->setTrustedProxies(array_map('trim', explode(',', env('TRUSTED_PROXIES'))));
         }
 
         // Ensure all request are over HTTPS in production
@@ -55,25 +50,13 @@ class StartupCheck
             return $next($request);
         }
 
-        // Check to prevent headless browsers from triggering activity
-        if (Utils::isNinja() && ! $request->phantomjs && strpos($request->header('User-Agent'), 'Headless') !== false) {
-            abort(403);
-        }
-
-        if (Utils::isSelfHost()) {
-            // Check if config:cache may have been run
-            if (! env('APP_URL')) {
-                echo "<p>There appears to be a problem with your configuration, please check your .env file.</p>" .
-                     "<p>If you've run 'php artisan config:cache' you will need to run 'php artisan config:clear'</p>.";
-                exit;
-            }
-
-            // Check if a new version was installed
+        // Check if a new version was installed
+        if (! Utils::isNinja()) {
             $file = storage_path() . '/version.txt';
             $version = @file_get_contents($file);
             if ($version != NINJA_VERSION) {
-                if (version_compare(phpversion(), '7.0.0', '<')) {
-                    dd('Please update PHP to >= 7.0.0');
+                if (version_compare(phpversion(), '5.5.9', '<')) {
+                    dd('Please update PHP to >= 5.5.9');
                 }
                 $handle = fopen($file, 'w');
                 fwrite($handle, NINJA_VERSION);
@@ -89,38 +72,11 @@ class StartupCheck
             }
         }
 
+        // Check the application is up to date and for any news feed messages
         if (Auth::check()) {
-            $company = Auth::user()->account->company;
             $count = Session::get(SESSION_COUNTER, 0);
             Session::put(SESSION_COUNTER, ++$count);
 
-            if (Utils::isNinja()) {
-                if ($coupon = request()->coupon) {
-                    if ($code = config('ninja.coupon_50_off')) {
-                        if (hash_equals($coupon, $code)) {
-                            $company->applyDiscount(.5);
-                            $company->save();
-                            Session::flash('message', trans('texts.applied_discount', ['discount' => 50]));
-                        }
-                    }
-                    if ($code = config('ninja.coupon_75_off')) {
-                        if (hash_equals($coupon, $code)) {
-                            $company->applyDiscount(.75);
-                            $company->save();
-                            Session::flash('message', trans('texts.applied_discount', ['discount' => 75]));
-                        }
-                    }
-                    if ($code = config('ninja.coupon_free_year')) {
-                        if (hash_equals($coupon, $code)) {
-                            $company->applyFreeYear();
-                            $company->save();
-                            Session::flash('message', trans('texts.applied_free_year'));
-                        }
-                    }
-                }
-            }
-
-            // Check the application is up to date and for any news feed messages
             if (isset($_SERVER['REQUEST_URI']) && ! Utils::startsWith($_SERVER['REQUEST_URI'], '/news_feed') && ! Session::has('news_feed_id')) {
                 $data = false;
                 if (Utils::isNinja()) {
@@ -154,7 +110,7 @@ class StartupCheck
         if (Input::has('lang')) {
             $locale = Input::get('lang');
             App::setLocale($locale);
-            session([SESSION_LOCALE => $locale]);
+            Session::set(SESSION_LOCALE, $locale);
 
             if (Auth::check()) {
                 if ($language = Language::whereLocale($locale)->first()) {
@@ -188,18 +144,15 @@ class StartupCheck
                 if ($data == RESULT_FAILURE) {
                     Session::flash('error', trans('texts.invalid_white_label_license'));
                 } elseif ($data) {
-                    $date = date_create($data)->modify('+1 year');
-                    if ($date < date_create()) {
-                        Session::flash('message', trans('texts.expired_white_label'));
-                    } else {
-                        $company->plan_term = PLAN_TERM_YEARLY;
-                        $company->plan_paid = $data;
-                        $company->plan_expires = $date->format('Y-m-d');
-                        $company->plan = PLAN_WHITE_LABEL;
-                        $company->save();
+                    $company = Auth::user()->account->company;
+                    $company->plan_term = PLAN_TERM_YEARLY;
+                    $company->plan_paid = $data;
+                    $date = max(date_create($data), date_create($company->plan_expires));
+                    $company->plan_expires = $date->modify('+1 year')->format('Y-m-d');
+                    $company->plan = PLAN_WHITE_LABEL;
+                    $company->save();
 
-                        Session::flash('message', trans('texts.bought_white_label'));
-                    }
+                    Session::flash('message', trans('texts.bought_white_label'));
                 } else {
                     Session::flash('error', trans('texts.white_label_license_error'));
                 }
@@ -227,7 +180,7 @@ class StartupCheck
                     $orderBy = 'id';
                 }
                 $tableData = $class::orderBy($orderBy)->get();
-                if ($tableData->count()) {
+                if (count($tableData)) {
                     Cache::forever($name, $tableData);
                 }
             }
@@ -235,7 +188,7 @@ class StartupCheck
 
         // Show message to IE 8 and before users
         if (isset($_SERVER['HTTP_USER_AGENT']) && preg_match('/(?i)msie [2-8]/', $_SERVER['HTTP_USER_AGENT'])) {
-            Session::flash('error', trans('texts.old_browser', ['link' => link_to(OUTDATE_BROWSER_URL, trans('texts.newer_browser'), ['target' => '_blank'])]));
+            Session::flash('error', trans('texts.old_browser', ['link' => OUTDATE_BROWSER_URL]));
         }
 
         $response = $next($request);

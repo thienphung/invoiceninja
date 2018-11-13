@@ -20,17 +20,13 @@ class TaxRateDatatable extends EntityDatatable
             [
                 'rate',
                 function ($model) {
-                    return ($model->rate + 0) . '%';
+                    return $model->rate . '%';
                 },
             ],
             [
                 'type',
                 function ($model) {
-                    if (auth()->user()->account->inclusive_taxes) {
-                        return trans('texts.inclusive');
-                    } else {
-                        return $model->is_inclusive ? trans('texts.inclusive') : trans('texts.exclusive');
-                    }
+                    return $model->is_inclusive ? trans('texts.inclusive') : trans('texts.exclusive');
                 },
             ],
         ];

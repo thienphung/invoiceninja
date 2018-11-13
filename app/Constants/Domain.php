@@ -2,8 +2,6 @@
 
 namespace App\Constants;
 
-use App\Libraries\Utils;
-
 class Domain
 {
     const INVOICENINJA_COM = 1;

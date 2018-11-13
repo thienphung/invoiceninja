@@ -7,23 +7,19 @@ use Auth;
 
 class ActivityReport extends AbstractReport
 {
-    public function getColumns()
-    {
-        return [
-            'date' => [],
-            'client' => [],
-            'user' => [],
-            'activity' => [],
-        ];
-    }
+    public $columns = [
+        'date',
+        'client',
+        'user',
+        'activity',
+    ];
 
     public function run()
     {
         $account = Auth::user()->account;
 
-        $startDate = $this->startDate;;
-        $endDate = $this->endDate;
-        $subgroup = $this->options['subgroup'];
+        $startDate = $this->startDate->format('Y-m-d');
+        $endDate = $this->endDate->format('Y-m-d');
 
         $activities = Activity::scope()
             ->with('client.contacts', 'user', 'invoice', 'payment', 'credit', 'task', 'expense', 'account')
@@ -36,18 +32,10 @@ class ActivityReport extends AbstractReport
                 $activity->present()->createdAt,
                 $client ? ($this->isExport ? $client->getDisplayName() : $client->present()->link) : '',
                 $activity->present()->user,
-                $this->isExport ? strip_tags($activity->getMessage()) : $activity->getMessage(),
+                $activity->getMessage(),
             ];
-
-            if ($subgroup == 'category') {
-                $dimension = trans('texts.' . $activity->relatedEntityType());
-            } else {
-                $dimension = $this->getDimension($activity);
-            }
-
-            $this->addChartData($dimension, $activity->created_at, 1);
         }
 
-        //dd($this->getChartData());
+
     }
 }

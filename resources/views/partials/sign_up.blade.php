@@ -1,53 +1,47 @@
 <script type="text/javascript">
 
-$(function() {
+  $(function() {
 
-    validateSignUp();
+      validateSignUp();
 
-    $('#signUpModal').on('shown.bs.modal', function () {
+      $('#signUpModal').on('shown.bs.modal', function () {
         trackEvent('/account', '/view_sign_up');
-        // change the type after page load to prevent errors in Chrome console
-        $('#new_password').attr('type', 'password');
         $(['first_name','last_name','email','password']).each(function(i, field) {
-            var $input = $('form.signUpForm #new_'+field);
-            if (!$input.val()) {
-                $input.focus();
-                return false;
-            }
+          var $input = $('form.signUpForm #new_'+field);
+          if (!$input.val()) {
+            $input.focus();
+            return false;
+          }
         });
-    })
+      })
 
-    @if (Auth::check() && !Utils::isNinja() && ! Auth::user()->registered)
-    $('#closeSignUpButton').hide();
-    showSignUp();
-    @elseif(Session::get('sign_up') || Input::get('sign_up'))
-    showSignUp();
-    @endif
+      @if (Auth::check() && !Utils::isNinja() && ! Auth::user()->registered)
+        $('#closeSignUpButton').hide();
+        showSignUp();
+      @elseif(Session::get('sign_up') || Input::get('sign_up'))
+        showSignUp();
+      @endif
 
-    // Ensure terms is checked for sign up form
-    @if (Auth::check())
-    setSignupEnabled(false);
-    $("#terms_checkbox, #privacy_checkbox").change(function() {
-        setSignupEnabled($('#terms_checkbox').is(':checked') && $('#privacy_checkbox').is(':checked'));
-    });
-    @endif
+      // Ensure terms is checked for sign up form
+      @if (Auth::check() && ! Auth::user()->registered)
+          setSignupEnabled(false);
+          $("#terms_checkbox").change(function() {
+              setSignupEnabled(this.checked);
+          });
+      @endif
 
-});
+  });
 
 
-function showSignUp() {
-    if (location.href.indexOf('/dashboard') == -1) {
-        location.href = "{{ url('/dashboard') }}?sign_up=true";
-    } else {
-        $('#signUpModal').modal('show');
-    }
-}
+  function showSignUp() {
+    $('#signUpModal').modal('show');
+  }
 
-function hideSignUp() {
+  function hideSignUp() {
     $('#signUpModal').modal('hide');
-}
+  }
 
-function setSignupEnabled(enabled) {
+  function setSignupEnabled(enabled) {
     $('.signup-form input[type=text]').prop('disabled', !enabled);
     $('.signup-form input[type=password]').prop('disabled', !enabled);
     if (enabled) {
@@ -55,112 +49,104 @@ function setSignupEnabled(enabled) {
     } else {
         $('.signup-form a.btn').addClass('disabled');
     }
-}
+  }
 
-function validateSignUp(showError) {
+  function validateSignUp(showError)
+  {
     var isFormValid = true;
     $(['first_name','last_name','email','password']).each(function(i, field) {
-        var $input = $('form.signUpForm #new_'+field),
-        val = $.trim($input.val());
-        var isValid = val && val.length >= (field == 'password' ? 8 : 1);
-
-        if (field == 'password') {
-            var score = scorePassword(val);
-            if (isValid) {
-                isValid = score > 50;
-            }
-
-            showPasswordStrength(val, score);
+      var $input = $('form.signUpForm #new_'+field),
+      val = $.trim($input.val());
+      var isValid = val && val.length >= (field == 'password' ? 6 : 1);
+      if (isValid && field == 'email') {
+        isValid = isValidEmailAddress(val);
+      }
+      if (isValid) {
+        $input.closest('div.form-group').removeClass('has-error').addClass('has-success');
+      } else {
+        isFormValid = false;
+        $input.closest('div.form-group').removeClass('has-success');
+        if (showError) {
+          $input.closest('div.form-group').addClass('has-error');
         }
-
-        if (isValid && field == 'email') {
-            isValid = isValidEmailAddress(val);
-        }
-        if (isValid) {
-            $input.closest('div.form-group').removeClass('has-error').addClass('has-success');
-        } else {
-            isFormValid = false;
-            $input.closest('div.form-group').removeClass('has-success');
-            if (showError) {
-                $input.closest('div.form-group').addClass('has-error');
-            }
-        }
+      }
     });
 
-    if (! $('#terms_checkbox').is(':checked') || ! $('#privacy_checkbox').is(':checked')) {
-        isFormValid = false;
-    }
+    @if (! Auth::user()->registered)
+        if (!$('#terms_checkbox').is(':checked')) {
+          isFormValid = false;
+        }
+    @endif
 
     $('#saveSignUpButton').prop('disabled', !isFormValid);
 
     return isFormValid;
-}
+  }
 
-function validateServerSignUp() {
+  function validateServerSignUp()
+  {
     if (!validateSignUp(true)) {
-        return;
+      return;
     }
 
     $('#signUpDiv, #signUpFooter').hide();
     $('#working').show();
 
     $.ajax({
-        type: 'POST',
-        url: '{{ URL::to('signup/validate') }}',
-        data: 'email=' + $('form.signUpForm #new_email').val(),
-        success: function(result) {
-            if (result == 'available') {
-                submitSignUp();
-            } else {
-                $('#errorTaken').show();
-                $('form.signUpForm #new_email').closest('div.form-group').removeClass('has-success').addClass('has-error');
-                $('#signUpDiv, #signUpFooter').show();
-                $('#working').hide();
-            }
+      type: 'POST',
+      url: '{{ URL::to('signup/validate') }}',
+      data: 'email=' + $('form.signUpForm #new_email').val(),
+      success: function(result) {
+        if (result == 'available') {
+          submitSignUp();
+        } else {
+          $('#errorTaken').show();
+          $('form.signUpForm #new_email').closest('div.form-group').removeClass('has-success').addClass('has-error');
+          $('#signUpDiv, #signUpFooter').show();
+          $('#working').hide();
         }
+      }
     });
-}
+  }
 
-function submitSignUp() {
+  function submitSignUp() {
     $.ajax({
-        type: 'POST',
-        url: '{{ URL::to('signup/submit') }}',
-        data: 'new_email=' + encodeURIComponent($('form.signUpForm #new_email').val()) +
-        '&new_password=' + encodeURIComponent($('form.signUpForm #new_password').val()) +
-        '&new_first_name=' + encodeURIComponent($('form.signUpForm #new_first_name').val()) +
-        '&new_last_name=' + encodeURIComponent($('form.signUpForm #new_last_name').val()) +
-        '&go_pro=' + $('#go_pro').val(),
-        success: function(result) {
-            if (result) {
-                @if (Auth::user()->registered)
-                hideSignUp();
-                NINJA.formIsChanged = false;
-                location.href = "{{ url('/dashboard') }}";
-                @else
-                handleSignedUp();
-                NINJA.isRegistered = true;
-                $('#gettingStartedIframe').attr('src', '{{ str_replace('watch?v=', 'embed/', config('ninja.video_urls.getting_started')) }}');
-                $('#signUpButton').hide();
-                $('#myAccountButton').html(result);
-                $('#signUpSuccessDiv, #signUpFooter, #closeSignUpButton').show();
-                $('#working, #saveSignUpButton').hide();
-                @endif
-            }
+      type: 'POST',
+      url: '{{ URL::to('signup/submit') }}',
+      data: 'new_email=' + encodeURIComponent($('form.signUpForm #new_email').val()) +
+      '&new_password=' + encodeURIComponent($('form.signUpForm #new_password').val()) +
+      '&new_first_name=' + encodeURIComponent($('form.signUpForm #new_first_name').val()) +
+      '&new_last_name=' + encodeURIComponent($('form.signUpForm #new_last_name').val()) +
+      '&go_pro=' + $('#go_pro').val(),
+      success: function(result) {
+        if (result) {
+          @if (Auth::user()->registered)
+              hideSignUp();
+              NINJA.formIsChanged = false;
+              location.reload();
+          @else
+              handleSignedUp();
+              NINJA.isRegistered = true;
+              $('#signUpButton').hide();
+              $('#myAccountButton').html(result);
+              $('#signUpSuccessDiv, #signUpFooter, #closeSignUpButton').show();
+              $('#working, #saveSignUpButton').hide();
+          @endif
         }
+      }
     });
-}
+  }
 
-function handleSignedUp() {
-    if (isStorageSupported()) {
-        localStorage.setItem('guest_key', '');
-    }
-    fbq('track', 'CompleteRegistration');
-    trackEvent('/account', '/signed_up');
-}
+  function handleSignedUp() {
+      if (isStorageSupported()) {
+          localStorage.setItem('guest_key', '');
+      }
+      fbq('track', 'CompleteRegistration');
+      trackEvent('/account', '/signed_up');
+  }
 
 </script>
 
-@if (\Request::is('dashboard'))
 <div class="modal fade" id="signUpModal" tabindex="-1" role="dialog" aria-labelledby="signUpModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -188,24 +174,17 @@ function handleSignedUp() {
         </div>
 
         <div class="row signup-form">
-            <div class="col-md-12">
-                {!! Former::checkbox('terms_checkbox')
-                    ->label(' ')
-                    ->value(1)
-                    ->text(trans('texts.agree_to_terms', [
-                        'terms' => link_to(config('ninja.terms_of_service_url.' . (Utils::isSelfHost() ? 'selfhost' : 'hosted')), trans('texts.terms_of_service'), ['target' => '_blank']),
-                    ]))
-                    ->raw() !!}
-                    {!! Former::checkbox('privacy_checkbox')
+            @if (! Auth::user()->registered)
+                <div class="col-md-12">
+                    {!! Former::checkbox('terms_checkbox')
                         ->label(' ')
                         ->value(1)
-                        ->text(trans('texts.agree_to_terms', [
-                            'terms' => link_to(config('ninja.privacy_policy_url.' . (Utils::isSelfHost() ? 'selfhost' : 'hosted')), trans('texts.privacy_policy'), ['target' => '_blank']),
-                        ]))
+                        ->text(trans('texts.agree_to_terms', ['terms' => '<a href="'.Utils::getTermsLink().'" target="_blank">'.trans('texts.terms_of_service').'</a>']))
                         ->raw() !!}
-                <br/>
-            </div>
-            <br/>&nbsp;<br/>
+                    <br/>
+                </div>
+                <br/>&nbsp;<br/>
+            @endif
             @if (Utils::isOAuthEnabled() && ! Auth::user()->registered)
                 <div class="col-md-5">
                     @foreach (App\Services\AuthService::$providers as $provider)
@@ -232,24 +211,19 @@ function handleSignedUp() {
                 {!! Former::text('new_first_name')
                         ->placeholder(trans('texts.first_name'))
                         ->autocomplete('given-name')
-                        ->data_lpignore('true')
                         ->label(' ') !!}
                 {!! Former::text('new_last_name')
                         ->placeholder(trans('texts.last_name'))
                         ->autocomplete('family-name')
-                        ->data_lpignore('true')
                         ->label(' ') !!}
                 {!! Former::text('new_email')
                         ->placeholder(trans('texts.email'))
                         ->autocomplete('email')
-                        ->data_lpignore('true')
                         ->label(' ') !!}
-                {!! Former::text('new_password')
+                {!! Former::password('new_password')
                         ->placeholder(trans('texts.password'))
                         ->autocomplete('new-password')
-                        ->data_lpignore('true')
-                        ->label(' ')
-                        ->help('<span id="passwordStrength">&nbsp;</span>') !!}
+                        ->label(' ') !!}
 
                 {{ Former::setOption('TwitterBootstrap3.labelWidths.large', 4) }}
                 {{ Former::setOption('TwitterBootstrap3.labelWidths.small', 4) }}
@@ -258,17 +232,11 @@ function handleSignedUp() {
             <center><div id="errorTaken" style="display:none">&nbsp;<br/><b>{{ trans('texts.email_taken') }}</b></div></center>
 
             <div class="col-md-12">
-                <div style="padding-top:20px;padding-bottom:10px;">
-                    @if (Auth::user()->registered)
-                        {!! trans('texts.email_alias_message') !!}
-                    @elseif (Utils::isNinjaProd())
-                        @if (Utils::isPro())
-                            {{ trans('texts.free_year_message') }}
-                        @else
-                            {{ trans('texts.trial_message') }}
-                        @endif
-                    @endif
-                </div>
+                @if (Auth::user()->registered)
+                    <div style="padding-top:20px;padding-bottom:10px;">{!! trans('texts.email_alias_message') !!}</div>
+                @elseif (Utils::isNinja())
+                    <div style="padding-top:20px;padding-bottom:10px;">{{ trans('texts.trial_message') }}</div>
+                @endif
             </div>
         </div>
 
@@ -288,11 +256,8 @@ function handleSignedUp() {
         <br/>
         @if (Utils::isNinja())
           {{ trans('texts.success_message') }}
-          <br/>&nbsp;<br/>
         @endif
-        @if (! auth()->user()->registered)
-            <iframe id="gettingStartedIframe" width="100%" height="315"></iframe>
-        @endif
+        <br/>
       </div>
 
       </div>
@@ -308,7 +273,7 @@ function handleSignedUp() {
     </div>
   </div>
 </div>
-@endif
+
 
 <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="logoutModalLabel" aria-hidden="true">
   <div class="modal-dialog">

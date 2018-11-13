@@ -3,8 +3,6 @@
 namespace App\Ninja\Repositories;
 
 use App\Models\Product;
-use App\Events\ProductWasCreated;
-use App\Events\ProductWasUpdated;
 use Utils;
 use DB;
 
@@ -19,7 +17,6 @@ class ProductRepository extends BaseRepository
     {
         return Product::scope()
                 ->withTrashed()
-                ->where('is_deleted', '=', false)
                 ->get();
     }
 
@@ -35,17 +32,13 @@ class ProductRepository extends BaseRepository
                     'products.tax_name1 as tax_name',
                     'products.tax_rate1 as tax_rate',
                     'products.deleted_at',
-                    'products.is_deleted',
-                    'products.custom_value1',
-                    'products.custom_value2'
+                    'products.is_deleted'
                 );
 
         if ($filter) {
             $query->where(function ($query) use ($filter) {
                 $query->where('products.product_key', 'like', '%'.$filter.'%')
-                      ->orWhere('products.notes', 'like', '%'.$filter.'%')
-                      ->orWhere('products.custom_value1', 'like', '%'.$filter.'%')
-                      ->orWhere('products.custom_value2', 'like', '%'.$filter.'%');
+                      ->orWhere('products.notes', 'like', '%'.$filter.'%');
             });
         }
 
@@ -61,7 +54,7 @@ class ProductRepository extends BaseRepository
         if ($product) {
             // do nothing
         } elseif ($publicId) {
-            $product = Product::scope($publicId)->withArchived()->firstOrFail();
+            $product = Product::scope($publicId)->firstOrFail();
             \Log::warning('Entity not set in product repo save');
         } else {
             $product = Product::createNew();
@@ -74,11 +67,6 @@ class ProductRepository extends BaseRepository
         $product->qty = isset($data['qty']) ? Utils::parseFloat($data['qty']) : 1;
         $product->save();
 
-        if ($publicId) {
-            event(new ProductWasUpdated($product, $data));
-        } else {
-            event(new ProductWasCreated($product, $data));
-        }
         return $product;
     }
 

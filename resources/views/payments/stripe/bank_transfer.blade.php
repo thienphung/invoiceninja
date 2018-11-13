@@ -5,15 +5,12 @@
 
     <script type="text/javascript" src="https://js.stripe.com/v2/"></script>
     <script type="text/javascript">
-        Stripe.setPublishableKey('{{ $accountGateway->getPublishableKey() }}');
+        Stripe.setPublishableKey('{{ $accountGateway->getPublishableStripeKey() }}');
         $(function() {
             var countries = {!! Cache::get('countries')->pluck('iso_3166_2','id') !!};
-            $('.payment-form').unbind('submit').submit(function(event) {
-                if ($('[name=plaidAccountId]').length) {
-                    return false;
-                }
+            $('.payment-form').submit(function(event) {
+                if($('[name=plaidAccountId]').length)return;
 
-                event.preventDefault();
                 var $form = $(this);
 
                 var data = {
@@ -44,10 +41,6 @@
                 }
                 if (!data.account_number || !Stripe.bankAccount.validateAccountNumber(data.account_number, data.country)) {
                     $('#js-error-message').html('{{ trans('texts.invalid_account_number') }}').fadeIn();
-                    return false;
-                }
-
-                if ($form.find('button').is(':disabled')) {
                     return false;
                 }
 
@@ -247,7 +240,7 @@
                         ->large() !!}
 
         @if ($accountGateway->getPlaidEnabled() && !empty($amount))
-            {!! Button::success(request()->capture ? strtoupper(trans('texts.submit')) : strtoupper(trans('texts.pay_now') . ' - ' . $account->formatMoney($amount, $client, CURRENCY_DECORATOR_CODE)  ))
+            {!! Button::success(request()->update ? strtoupper(trans('texts.submit')) : strtoupper(trans('texts.pay_now') . ' - ' . $account->formatMoney($amount, $client, CURRENCY_DECORATOR_CODE)  ))
                         ->submit()
                         ->withAttributes(['style'=>'display:none', 'id'=>'pay_now_button'])
                         ->large() !!}

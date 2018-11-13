@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Events\UserSettingsChanged;
 use App\Models\Account;
 use App\Models\Industry;
-use App\Models\Invoice;
 use App\Ninja\Mailers\Mailer;
 use App\Ninja\Repositories\AccountRepository;
 use App\Services\EmailService;
@@ -123,27 +122,18 @@ class AppController extends BaseController
         fwrite($fp, $config);
         fclose($fp);
 
-        if (! Utils::isDatabaseSetup()) {
-            // == DB Migrate & Seed == //
-            $sqlFile = base_path() . '/database/setup.sql';
-            DB::unprepared(file_get_contents($sqlFile));
-        }
-
+        // == DB Migrate & Seed == //
+        $sqlFile = base_path() . '/database/setup.sql';
+        DB::unprepared(file_get_contents($sqlFile));
         Cache::flush();
-        Artisan::call('db:seed', ['--force' => true, '--class' => 'UpdateSeeder']);
         Artisan::call('optimize', ['--force' => true]);
 
-        if (! Account::count()) {
-            $firstName = trim(Input::get('first_name'));
-            $lastName = trim(Input::get('last_name'));
-            $email = trim(strtolower(Input::get('email')));
-            $password = trim(Input::get('password'));
-            $account = $this->accountRepo->create($firstName, $lastName, $email, $password);
-
-            $user = $account->users()->first();
-            $user->acceptLatestTerms(request()->getClientIp());
-            $user->save();
-        }
+        $firstName = trim(Input::get('first_name'));
+        $lastName = trim(Input::get('last_name'));
+        $email = trim(strtolower(Input::get('email')));
+        $password = trim(Input::get('password'));
+        $account = $this->accountRepo->create($firstName, $lastName, $email, $password);
+        $user = $account->users()->first();
 
         return Redirect::to('/login');
     }
@@ -179,18 +169,14 @@ class AppController extends BaseController
         $_ENV['DB_PASSWORD'] = $db['type']['password'];
 
         if ($mail) {
-            $prefix = '';
-            if (($user = auth()->user()) && Account::count() > 1) {
-                $prefix = $user->account_id . '_';
-            }
-            $_ENV[$prefix . 'MAIL_DRIVER'] = $mail['driver'];
-            $_ENV[$prefix . 'MAIL_PORT'] = $mail['port'];
-            $_ENV[$prefix . 'MAIL_ENCRYPTION'] = $mail['encryption'];
-            $_ENV[$prefix . 'MAIL_HOST'] = $mail['host'];
-            $_ENV[$prefix . 'MAIL_USERNAME'] = $mail['username'];
-            $_ENV[$prefix . 'MAIL_FROM_NAME'] = $mail['from']['name'];
-            $_ENV[$prefix . 'MAIL_FROM_ADDRESS'] = $mail['from']['address'];
-            $_ENV[$prefix . 'MAIL_PASSWORD'] = $mail['password'];
+            $_ENV['MAIL_DRIVER'] = $mail['driver'];
+            $_ENV['MAIL_PORT'] = $mail['port'];
+            $_ENV['MAIL_ENCRYPTION'] = $mail['encryption'];
+            $_ENV['MAIL_HOST'] = $mail['host'];
+            $_ENV['MAIL_USERNAME'] = $mail['username'];
+            $_ENV['MAIL_FROM_NAME'] = $mail['from']['name'];
+            $_ENV['MAIL_FROM_ADDRESS'] = $mail['from']['address'];
+            $_ENV['MAIL_PASSWORD'] = $mail['password'];
             $_ENV['MAILGUN_DOMAIN'] = $mail['mailgun_domain'];
             $_ENV['MAILGUN_SECRET'] = $mail['mailgun_secret'];
         }
@@ -283,24 +269,9 @@ class AppController extends BaseController
     public function update()
     {
         if (! Utils::isNinjaProd()) {
-            if ($password = env('UPDATE_SECRET')) {
-                if (! hash_equals($password, request('secret') ?: '')) {
-                    $message = 'Invalid secret: /update?secret=<value>';
-                    Utils::logError($message);
-                    echo $message;
-                    exit;
-                }
-            }
-
             try {
                 set_time_limit(60 * 5);
                 $this->checkInnoDB();
-
-                $cacheCompiled = base_path('bootstrap/cache/compiled.php');
-                if (file_exists($cacheCompiled)) { unlink ($cacheCompiled); }
-                $cacheServices = base_path('bootstrap/cache/services.json');
-                if (file_exists($cacheServices)) { unlink ($cacheServices); }
-
                 Artisan::call('clear-compiled');
                 Artisan::call('cache:clear');
                 Artisan::call('debugbar:clear');
@@ -334,7 +305,7 @@ class AppController extends BaseController
             }
         }
 
-        return Redirect::to('/?clear_cache=true');
+        return Redirect::to('/');
     }
 
     // MySQL changed the default table type from MyISAM to InnoDB
@@ -382,33 +353,15 @@ class AppController extends BaseController
         try {
             Artisan::call('ninja:check-data');
             Artisan::call('ninja:init-lookup', ['--validate' => true]);
-
-            // check error log is empty
-            $errorLog = storage_path('logs/laravel-error.log');
-            if (file_exists($errorLog)) {
-                return 'Failure: error log exists';
-            }
-
             return RESULT_SUCCESS;
         } catch (Exception $exception) {
             return $exception->getMessage() ?: RESULT_FAILURE;
         }
     }
 
-    public function errors()
-    {
-        if (Utils::isNinjaProd()) {
-            return redirect('/');
-        }
-
-        $errors = Utils::getErrors();
-
-        return view('errors.list', compact('errors'));
-    }
-
     public function stats()
     {
-        if (! hash_equals(Input::get('password') ?: '', env('RESELLER_PASSWORD'))) {
+        if (! hash_equals(Input::get('password'), env('RESELLER_PASSWORD'))) {
             sleep(3);
 
             return '';
@@ -431,48 +384,5 @@ class AppController extends BaseController
         }
 
         return json_encode($data);
-    }
-
-    public function testHeadless()
-    {
-        $invoice = Invoice::scope()->orderBy('id')->first();
-
-        if (! $invoice) {
-            dd('Please create an invoice to run this test');
-        }
-
-        header('Content-type:application/pdf');
-        echo $invoice->getPDFString();
-        exit;
-    }
-
-    public function runCommand()
-    {
-        if (Utils::isNinjaProd()) {
-            abort(400, 'Not allowed');
-        }
-
-        $command = request()->command;
-        $options = request()->options ?: [];
-        $secret = env('COMMAND_SECRET');
-
-        if (! $secret) {
-            exit('Set a value for COMMAND_SECRET in the .env file');
-        } elseif (! hash_equals($secret, request()->secret ?: '')) {
-            exit('Invalid secret');
-        }
-
-        if (! $command || ! in_array($command, ['send-invoices', 'send-reminders', 'update-key'])) {
-            exit('Invalid command: Valid options are send-invoices, send-reminders or update-key');
-        }
-
-        Artisan::call('ninja:' . $command, $options);
-
-        return response(nl2br(Artisan::output()));
-    }
-
-    public function redirect()
-    {
-        return redirect((Utils::isNinja() ? NINJA_WEB_URL : ''), 301);
     }
 }

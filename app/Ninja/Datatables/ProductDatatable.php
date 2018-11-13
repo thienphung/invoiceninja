@@ -14,8 +14,6 @@ class ProductDatatable extends EntityDatatable
 
     public function columns()
     {
-        $account = Auth::user()->account;
-
         return [
             [
                 'product_key',
@@ -26,13 +24,13 @@ class ProductDatatable extends EntityDatatable
             [
                 'notes',
                 function ($model) {
-                    return $this->showWithTooltip($model->notes);
+                    return nl2br(Str::limit($model->notes, 100));
                 },
             ],
             [
                 'cost',
                 function ($model) {
-                    return Utils::roundSignificant($model->cost);
+                    return Utils::formatMoney($model->cost);
                 },
             ],
             [
@@ -40,22 +38,8 @@ class ProductDatatable extends EntityDatatable
                 function ($model) {
                     return $model->tax_rate ? ($model->tax_name . ' ' . $model->tax_rate . '%') : '';
                 },
-                $account->invoice_item_taxes,
+                Auth::user()->account->invoice_item_taxes,
             ],
-            [
-                'custom_value1',
-                function ($model) {
-                    return $model->custom_value1;
-                },
-                $account->customLabel('product1')
-            ],
-            [
-                'custom_value2',
-                function ($model) {
-                    return $model->custom_value2;
-                },
-                $account->customLabel('product2')
-            ]
         ];
     }
 
@@ -66,24 +50,6 @@ class ProductDatatable extends EntityDatatable
                 uctrans('texts.edit_product'),
                 function ($model) {
                     return URL::to("products/{$model->public_id}/edit");
-                },
-            ],
-            [
-                trans('texts.clone_product'),
-                function ($model) {
-                    return URL::to("products/{$model->public_id}/clone");
-                },
-                function ($model) {
-                    return Auth::user()->can('create', ENTITY_PRODUCT);
-                },
-            ],
-            [
-                trans('texts.invoice_product'),
-                function ($model) {
-                    return "javascript:submitForm_product('invoice', {$model->public_id})";
-                },
-                function ($model) {
-                    return (! $model->deleted_at || $model->deleted_at == '0000-00-00') && Auth::user()->can('create', ENTITY_INVOICE);
                 },
             ],
         ];

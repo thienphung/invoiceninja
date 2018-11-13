@@ -55,10 +55,6 @@ class CountriesSeeder extends Seeder
             'BG' => [ // Belgium
                 'swap_currency_symbol' => true,
             ],
-            'CA' => [
-                'thousand_separator' => ',',
-                'decimal_separator' => '.',
-            ],
             'CH' => [
                 'swap_postal_code' => true,
             ],
@@ -124,10 +120,6 @@ class CountriesSeeder extends Seeder
             'LU' => [
                 'swap_postal_code' => true,
             ],
-            'MT' => [
-                'thousand_separator' => ',',
-                'decimal_separator' => '.',
-            ],
             'MY' => [
                 'swap_postal_code' => true,
             ],
@@ -161,9 +153,6 @@ class CountriesSeeder extends Seeder
             'US' => [
                 'thousand_separator' => ',',
                 'decimal_separator' => '.',
-            ],
-            'SR' => [ // Suriname
-                'swap_currency_symbol' => true,
             ],
             'UY' => [
                 'swap_postal_code' => true,

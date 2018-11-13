@@ -17,8 +17,7 @@ class ClientDatatable extends EntityDatatable
             [
                 'name',
                 function ($model) {
-                    $str = link_to("clients/{$model->public_id}", $model->name ?: '')->toHtml();
-                    return $this->addNote($str, $model->private_notes);
+                    return link_to("clients/{$model->public_id}", $model->name ?: '')->toHtml();
                 },
             ],
             [
@@ -67,10 +66,10 @@ class ClientDatatable extends EntityDatatable
             [
                 trans('texts.edit_client'),
                 function ($model) {
-                    if(Auth::user()->can('edit', [ENTITY_CLIENT, $model]))
-                        return URL::to("clients/{$model->public_id}/edit");
-                    elseif(Auth::user()->can('view', [ENTITY_CLIENT, $model]))
-                        return URL::to("clients/{$model->public_id}");
+                    return URL::to("clients/{$model->public_id}/edit");
+                },
+                function ($model) {
+                    return Auth::user()->can('editByOwner', [ENTITY_CLIENT, $model->user_id]);
                 },
             ],
             [
@@ -78,7 +77,9 @@ class ClientDatatable extends EntityDatatable
                     return false;
                 },
                 function ($model) {
-                    return Auth::user()->can('edit', [ENTITY_CLIENT, $model]) && (Auth::user()->can('create', ENTITY_TASK) || Auth::user()->can('create', ENTITY_INVOICE));
+                    $user = Auth::user();
+
+                    return $user->can('editByOwner', [ENTITY_CLIENT, $model->user_id]) && ($user->can('create', ENTITY_TASK) || $user->can('create', ENTITY_INVOICE));
                 },
             ],
             [
@@ -113,7 +114,9 @@ class ClientDatatable extends EntityDatatable
                     return false;
                 },
                 function ($model) {
-                    return (Auth::user()->can('create', ENTITY_TASK) || Auth::user()->can('create', ENTITY_INVOICE)) && (Auth::user()->can('create', ENTITY_PAYMENT) || Auth::user()->can('create', ENTITY_CREDIT) || Auth::user()->can('create', ENTITY_EXPENSE));
+                    $user = Auth::user();
+
+                    return ($user->can('create', ENTITY_TASK) || $user->can('create', ENTITY_INVOICE)) && ($user->can('create', ENTITY_PAYMENT) || $user->can('create', ENTITY_CREDIT) || $user->can('create', ENTITY_EXPENSE));
                 },
             ],
             [
@@ -137,7 +140,7 @@ class ClientDatatable extends EntityDatatable
             [
                 trans('texts.enter_expense'),
                 function ($model) {
-                    return URL::to("expenses/create/{$model->public_id}");
+                    return URL::to("expenses/create/0/{$model->public_id}");
                 },
                 function ($model) {
                     return Auth::user()->can('create', ENTITY_EXPENSE);

@@ -31,7 +31,7 @@ class RegisterRequest extends Request
     public function rules()
     {
         $rules = [
-            'email' => 'email|required|unique:users',
+            'email' => 'required|unique:users',
             'first_name' => 'required',
             'last_name' => 'required',
             'password' => 'required',

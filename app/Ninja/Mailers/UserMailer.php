@@ -39,31 +39,6 @@ class UserMailer extends Mailer
     }
 
     /**
-     * @param User      $user
-     * @param User|null $invitor
-     */
-    public function sendEmailChanged(User $user)
-    {
-        $oldEmail = $user->getOriginal('email');
-        $newEmail = $user->email;
-
-        if (! $oldEmail || ! $newEmail) {
-            return;
-        }
-
-        $view = 'user_message';
-        $subject = trans('texts.email_address_changed');
-
-        $data = [
-            'user' => $user,
-            'userName' => $user->getDisplayName(),
-            'primaryMessage' => trans('texts.email_address_changed_message', ['old_email' => $oldEmail, 'new_email' => $newEmail]),
-        ];
-
-        $this->sendTo($oldEmail, CONTACT_EMAIL, CONTACT_NAME, $subject, $view, $data);
-    }
-
-    /**
      * @param User    $user
      * @param Invoice $invoice
      * @param $notificationType
@@ -76,7 +51,7 @@ class UserMailer extends Mailer
         Payment $payment = null,
         $notes = false
     ) {
-        if (! $user->shouldNotify($invoice)) {
+        if (! $user->email || $user->cannot('view', $invoice)) {
             return;
         }
 
@@ -144,20 +119,17 @@ class UserMailer extends Mailer
     /**
      * @param Invitation $invitation
      */
-    public function sendMessage($user, $subject, $message, $data = false)
+    public function sendMessage($user, $subject, $message, $invoice = false)
     {
         if (! $user->email) {
             return;
         }
 
-        $invoice = $data && isset($data['invoice']) ? $data['invoice'] : false;
         $view = 'user_message';
-
-        $data = $data ?: [];
-        $data += [
+        $data = [
             'userName' => $user->getDisplayName(),
-            'primaryMessage' => $message,
-            //'secondaryMessage' => $message,
+            'primaryMessage' => $subject,
+            'secondaryMessage' => $message,
             'invoiceLink' => $invoice ? $invoice->present()->multiAccountLink : false,
         ];
 
@@ -175,44 +147,6 @@ class UserMailer extends Mailer
         $data = [
             'userName' => $user->getDisplayName(),
             'code' => $code,
-        ];
-
-        $this->sendTo($user->email, CONTACT_EMAIL, CONTACT_NAME, $subject, $view, $data);
-    }
-
-    public function sendPasswordReset($user, $token)
-    {
-        if (! $user->email) {
-            return;
-        }
-
-        $subject = trans('texts.your_password_reset_link');
-        $view = 'password';
-        $data = [
-            'token' => $token,
-        ];
-
-        $this->sendTo($user->email, CONTACT_EMAIL, CONTACT_NAME, $subject, $view, $data);
-    }
-
-    public function sendScheduledReport($scheduledReport, $file)
-    {
-        $user = $scheduledReport->user;
-        $config = json_decode($scheduledReport->config);
-
-        if (! $user->email) {
-            return;
-        }
-
-        $subject = sprintf('%s - %s %s', APP_NAME, trans('texts.' . $config->report_type), trans('texts.report'));
-        $view = 'user_message';
-        $data = [
-            'userName' => $user->getDisplayName(),
-            'primaryMessage' => trans('texts.scheduled_report_attached', ['type' => trans('texts.' . $config->report_type)]),
-            'documents' => [[
-                'name' => $file->filename . '.' . $config->export_format,
-                'data' =>  $file->string($config->export_format),
-            ]]
         ];
 
         $this->sendTo($user->email, CONTACT_EMAIL, CONTACT_NAME, $subject, $view, $data);

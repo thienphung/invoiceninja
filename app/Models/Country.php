@@ -24,8 +24,6 @@ class Country extends Eloquent
         'swap_currency_symbol',
         'thousand_separator',
         'decimal_separator',
-        'iso_3166_2',
-        'iso_3166_3',
     ];
 
     /**
@@ -41,6 +39,6 @@ class Country extends Eloquent
      */
     public function getName()
     {
-        return trans('texts.country_' . $this->name);
+        return $this->name;
     }
 }

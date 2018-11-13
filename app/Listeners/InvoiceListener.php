@@ -6,7 +6,6 @@ use Illuminate\Queue\Events\JobExceptionOccurred;
 use App\Events\InvoiceInvitationWasViewed;
 use App\Events\InvoiceWasCreated;
 use App\Events\InvoiceWasUpdated;
-use App\Events\InvoiceWasEmailed;
 use App\Events\PaymentFailed;
 use App\Events\PaymentWasCreated;
 use App\Events\PaymentWasDeleted;
@@ -49,7 +48,7 @@ class InvoiceListener
     public function updatedInvoice(InvoiceWasUpdated $event)
     {
         $invoice = $event->invoice;
-        $invoice->updatePaidStatus(false, false);
+        $invoice->updatePaidStatus(false);
     }
 
     /**
@@ -59,16 +58,6 @@ class InvoiceListener
     {
         $invitation = $event->invitation;
         $invitation->markViewed();
-    }
-
-    /**
-     * @param InvoiceWasEmailed $event
-     */
-    public function emailedInvoice(InvoiceWasEmailed $event)
-    {
-        $invoice = $event->invoice;
-        $invoice->last_sent_date = date('Y-m-d');
-        $invoice->save();
     }
 
     /**
@@ -82,7 +71,7 @@ class InvoiceListener
         $partial = max(0, $invoice->partial - $payment->amount);
 
         $invoice->updateBalances($adjustment, $partial);
-        $invoice->updatePaidStatus(true);
+        $invoice->updatePaidStatus();
 
         // store a backup of the invoice
         $activity = Activity::wherePaymentId($payment->id)
@@ -90,11 +79,6 @@ class InvoiceListener
                         ->first();
         $activity->json_backup = $invoice->hidePrivateFields()->toJSON();
         $activity->save();
-
-        if ($invoice->balance == 0 && $payment->account->auto_archive_invoice) {
-            $invoiceRepo = app('App\Ninja\Repositories\InvoiceRepository');
-            $invoiceRepo->archive($invoice);
-        }
     }
 
     /**
@@ -103,11 +87,6 @@ class InvoiceListener
     public function deletedPayment(PaymentWasDeleted $event)
     {
         $payment = $event->payment;
-
-        if ($payment->isFailedOrVoided()) {
-            return;
-        }
-
         $invoice = $payment->invoice;
         $adjustment = $payment->getCompletedAmount();
 
@@ -164,11 +143,6 @@ class InvoiceListener
         }
 
         $payment = $event->payment;
-
-        if ($payment->isFailedOrVoided()) {
-            return;
-        }
-
         $invoice = $payment->invoice;
         $adjustment = $payment->getCompletedAmount() * -1;
 

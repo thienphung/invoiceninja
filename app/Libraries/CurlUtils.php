@@ -51,7 +51,6 @@ class CurlUtils
 
         $client = Client::getInstance();
         $client->isLazy();
-        //$client->getEngine()->addOption("--ignore-ssl-errors=true");
         $client->getEngine()->setPath($path);
 
         $request = $client->getMessageFactory()->createRequest($url, $method);
@@ -64,34 +63,7 @@ class CurlUtils
         if ($response->getStatus() === 200) {
             return $response->getContent();
         } else {
-            return false;
-        }
-    }
-
-    public static function renderPDF($url, $filename)
-    {
-        if (! $path = env('PHANTOMJS_BIN_PATH')) {
-            return false;
-        }
-
-        $client = Client::getInstance();
-        $client->isLazy();
-        $client->getEngine()->addOption("--load-images=true");
-        $client->getEngine()->setPath($path);
-
-        $request = $client->getMessageFactory()->createPdfRequest($url, 'GET');
-        $request->setOutputFile($filename);
-        //$request->setOrientation('landscape');
-        $request->setMargin('0');
-
-        $response = $client->getMessageFactory()->createResponse();
-        $client->send($request, $response);
-
-        if ($response->getStatus() === 200) {
-            $pdf = file_get_contents($filename);
-            unlink($filename);
-            return $pdf;
-        } else {
+            Utils::logError('Local PhantomJS Error: ' . $response->getStatus() . ' - ' . $url);
             return false;
         }
     }

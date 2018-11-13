@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Client;
-use App\Models\Contact;
 use App\Models\EntityModel;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
@@ -11,10 +10,8 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\Vendor;
-use App\Models\AccountGatewayToken;
 use App\Ninja\Import\BaseTransformer;
 use App\Ninja\Repositories\ClientRepository;
-use App\Ninja\Repositories\CustomerRepository;
 use App\Ninja\Repositories\ContactRepository;
 use App\Ninja\Repositories\ExpenseCategoryRepository;
 use App\Ninja\Repositories\ExpenseRepository;
@@ -22,7 +19,6 @@ use App\Ninja\Repositories\InvoiceRepository;
 use App\Ninja\Repositories\PaymentRepository;
 use App\Ninja\Repositories\ProductRepository;
 use App\Ninja\Repositories\VendorRepository;
-use App\Ninja\Repositories\TaxRateRepository;
 use App\Ninja\Serializers\ArraySerializer;
 use Auth;
 use Cache;
@@ -35,9 +31,6 @@ use Session;
 use stdClass;
 use Utils;
 use Carbon;
-use League\Csv\Reader;
-use League\Csv\Statement;
-
 
 /**
  * Class ImportService.
@@ -58,11 +51,6 @@ class ImportService
      * @var ClientRepository
      */
     protected $clientRepo;
-
-    /**
-     * @var CustomerRepository
-     */
-    protected $customerRepo;
 
     /**
      * @var ContactRepository
@@ -100,9 +88,7 @@ class ImportService
         ENTITY_PAYMENT,
         ENTITY_TASK,
         ENTITY_PRODUCT,
-        ENTITY_VENDOR,
         ENTITY_EXPENSE,
-        ENTITY_CUSTOMER,
     ];
 
     /**
@@ -116,9 +102,7 @@ class ImportService
         IMPORT_INVOICEABLE,
         IMPORT_INVOICEPLANE,
         IMPORT_NUTCACHE,
-        IMPORT_PANCAKE,
         IMPORT_RONIN,
-        IMPORT_STRIPE,
         IMPORT_WAVE,
         IMPORT_ZOHO,
     ];
@@ -128,7 +112,6 @@ class ImportService
      *
      * @param Manager           $manager
      * @param ClientRepository  $clientRepo
-     * @param CustomerRepository $customerRepo
      * @param InvoiceRepository $invoiceRepo
      * @param PaymentRepository $paymentRepo
      * @param ContactRepository $contactRepo
@@ -137,21 +120,18 @@ class ImportService
     public function __construct(
         Manager $manager,
         ClientRepository $clientRepo,
-        CustomerRepository $customerRepo,
         InvoiceRepository $invoiceRepo,
         PaymentRepository $paymentRepo,
         ContactRepository $contactRepo,
         ProductRepository $productRepo,
         ExpenseRepository $expenseRepo,
         VendorRepository $vendorRepo,
-        ExpenseCategoryRepository $expenseCategoryRepo,
-        TaxRateRepository $taxRateRepository
+        ExpenseCategoryRepository $expenseCategoryRepo
     ) {
         $this->fractal = $manager;
         $this->fractal->setSerializer(new ArraySerializer());
 
         $this->clientRepo = $clientRepo;
-        $this->customerRepo = $customerRepo;
         $this->invoiceRepo = $invoiceRepo;
         $this->paymentRepo = $paymentRepo;
         $this->contactRepo = $contactRepo;
@@ -159,7 +139,6 @@ class ImportService
         $this->expenseRepo = $expenseRepo;
         $this->vendorRepo = $vendorRepo;
         $this->expenseCategoryRepo = $expenseCategoryRepo;
-        $this->taxRateRepository = $taxRateRepository;
     }
 
     /**
@@ -398,14 +377,12 @@ class ImportService
             }
         }
 
-        /*
         // if the invoice number is blank we'll assign it
         if ($entityType == ENTITY_INVOICE && ! $data['invoice_number']) {
             $account = Auth::user()->account;
             $invoice = Invoice::createNew();
             $data['invoice_number'] = $account->getNextNumber($invoice);
         }
-        */
 
         if (EntityModel::validate($data, $entityType) !== true) {
             return false;
@@ -448,12 +425,8 @@ class ImportService
         $entity = $this->{"{$entityType}Repo"}->save($data);
 
         // update the entity maps
-        if ($entityType != ENTITY_CUSTOMER) {
-            $mapFunction = 'add' . ucwords($entity->getEntityType()) . 'ToMaps';
-            if (method_exists($this, $mapFunction)) {
-                $this->$mapFunction($entity);
-            }
-        }
+        $mapFunction = 'add' . ucwords($entity->getEntityType()) . 'ToMaps';
+        $this->$mapFunction($entity);
 
         // if the invoice is paid we'll also create a payment record
         if ($entityType === ENTITY_INVOICE && isset($data['paid']) && $data['paid'] > 0) {
@@ -533,6 +506,7 @@ class ImportService
 
         if ($resource = $paymentTransformer->transform($row)) {
             $data = $this->fractal->createData($resource)->toArray();
+            $data['amount'] = min($data['amount'], Utils::parseFloat($row->amount));
             $data['invoice_id'] = $invoicePublicId;
             if (Payment::validate($data) === true) {
                 $data['invoice_id'] = $invoiceId;
@@ -655,16 +629,14 @@ class ImportService
 
     private function getCsvData($fileName)
     {
+        require_once app_path().'/Includes/parsecsv.lib.php';
+
         $this->checkForFile($fileName);
 
-        if (! ini_get('auto_detect_line_endings')) {
-            ini_set('auto_detect_line_endings', '1');
-        }
-
-        $csv = Reader::createFromPath($fileName, 'r');
-        //$csv->setHeaderOffset(0); //set the CSV header offset
-        $stmt = new Statement();
-        $data = iterator_to_array($stmt->process($csv));
+        $csv = new parseCSV();
+        $csv->heading = false;
+        $csv->auto($fileName);
+        $data = $csv->data;
 
         if (count($data) > 0) {
             $headers = $data[0];
@@ -826,9 +798,7 @@ class ImportService
                 continue;
             }
 
-            if (isset($data[$index])) {
-                $obj->$field = $data[$index];
-            }
+            $obj->$field = $data[$index];
         }
 
         return $obj;
@@ -869,8 +839,6 @@ class ImportService
 
         $this->maps = [
             'client' => [],
-            'contact' => [],
-            'customer' => [],
             'invoice' => [],
             'invoice_client' => [],
             'product' => [],
@@ -881,23 +849,11 @@ class ImportService
             'invoice_ids' => [],
             'vendors' => [],
             'expense_categories' => [],
-            'tax_rates' => [],
-            'tax_names' => [],
         ];
 
         $clients = $this->clientRepo->all();
         foreach ($clients as $client) {
             $this->addClientToMaps($client);
-        }
-
-        $customers = $this->customerRepo->all();
-        foreach ($customers as $customer) {
-            $this->addCustomerToMaps($customer);
-        }
-
-        $contacts = $this->contactRepo->all();
-        foreach ($contacts as $contact) {
-            $this->addContactToMaps($contact);
         }
 
         $invoices = $this->invoiceRepo->all();
@@ -930,13 +886,6 @@ class ImportService
         foreach ($expenseCaegories as $category) {
             $this->addExpenseCategoryToMaps($category);
         }
-
-        $taxRates = $this->taxRateRepository->all();
-        foreach ($taxRates as $taxRate) {
-            $name = trim(strtolower($taxRate->name));
-            $this->maps['tax_rates'][$name] = $taxRate->rate;
-            $this->maps['tax_names'][$name] = $taxRate->name;
-        }
     }
 
     /**
@@ -945,7 +894,6 @@ class ImportService
     private function addInvoiceToMaps(Invoice $invoice)
     {
         if ($number = strtolower(trim($invoice->invoice_number))) {
-            $this->maps['invoices'][$number] = $invoice;
             $this->maps['invoice'][$number] = $invoice->id;
             $this->maps['invoice_client'][$number] = $invoice->client_id;
             $this->maps['invoice_ids'][$invoice->public_id] = $invoice->id;
@@ -961,34 +909,9 @@ class ImportService
             $this->maps['client'][$name] = $client->id;
             $this->maps['client_ids'][$client->public_id] = $client->id;
         }
-        if ($client->contacts->count()) {
-            $contact = $client->contacts[0];
-            if ($email = strtolower(trim($contact->email))) {
-                $this->maps['client'][$email] = $client->id;
-            }
-            if ($name = strtolower(trim($contact->getFullName()))) {
-                $this->maps['client'][$name] = $client->id;
-            }
+        if (count($client->contacts) && $name = strtolower(trim($client->contacts[0]->email))) {
+            $this->maps['client'][$name] = $client->id;
             $this->maps['client_ids'][$client->public_id] = $client->id;
-        }
-    }
-
-    /**
-     * @param Customer $customer
-     */
-    private function addCustomerToMaps(AccountGatewayToken $customer)
-    {
-        $this->maps['customer'][$customer->token] = $customer;
-        $this->maps['customer'][$customer->contact->email] = $customer;
-    }
-
-    /**
-     * @param Product $product
-     */
-    private function addContactToMaps(Contact $contact)
-    {
-        if ($key = strtolower(trim($contact->email))) {
-            $this->maps['contact'][$key] = $contact;
         }
     }
 
@@ -998,7 +921,9 @@ class ImportService
     private function addProductToMaps(Product $product)
     {
         if ($key = strtolower(trim($product->product_key))) {
-            $this->maps['product'][$key] = $product;
+            $this->maps['product'][$key] = $product->id;
+            $this->maps['product_notes'][$key] = $product->notes;
+            $this->maps['product_cost'][$key] = $product->cost;
         }
     }
 

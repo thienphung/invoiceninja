@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Eloquent;
-use Str;
 
 /**
  * Class Currency.
@@ -20,7 +19,6 @@ class Currency extends Eloquent
      */
     protected $casts = [
         'swap_currency_symbol' => 'boolean',
-        'exchange_rate' => 'double',
     ];
 
     /**
@@ -29,13 +27,5 @@ class Currency extends Eloquent
     public function getName()
     {
         return $this->name;
-    }
-
-    /**
-     * @return mixed
-     */
-    public function getTranslatedName()
-    {
-        return trans('texts.currency_' . Str::slug($this->name, '_'));
     }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Libraries;
 
-use DB;
 use App;
 use Auth;
 use Cache;
@@ -89,14 +88,9 @@ class Utils
         return env('NINJA_DEV') == 'true';
     }
 
-    public static function isTimeTracker()
-    {
-        return array_get($_SERVER, 'HTTP_USER_AGENT') == TIME_TRACKER_USER_AGENT;
-    }
-
     public static function requireHTTPS()
     {
-        if (in_array(Request::root(), ['http://www.ninja.test', 'http://www.ninja.test:8000'])) {
+        if (Request::root() === 'http://ninja.dev' || Request::root() === 'http://ninja.dev:8000') {
             return false;
         }
 
@@ -106,11 +100,6 @@ class Utils
     public static function isReseller()
     {
         return self::getResllerType() ? true : false;
-    }
-
-    public static function isRootFolder()
-    {
-        return strlen(preg_replace('/[^\/]/', '', url('/'))) == 2;
     }
 
 	public static function clientViewCSS()
@@ -177,6 +166,11 @@ class Utils
         return isset($_ENV['RESELLER_TYPE']) ? $_ENV['RESELLER_TYPE'] : false;
     }
 
+    public static function getTermsLink()
+    {
+        return static::isNinja() ? NINJA_WEB_URL.'/terms' : NINJA_WEB_URL.'/self-hosting-the-invoice-ninja-platform';
+    }
+
     public static function isOAuthEnabled()
     {
         $providers = [
@@ -239,26 +233,6 @@ class Utils
     public static function isEnglish()
     {
         return App::getLocale() == 'en';
-    }
-
-    public static function getDebugInfo()
-    {
-        if ($info = session('DEBUG_INFO')) {
-            return $info;
-        }
-
-        $mysqlVersion = DB::select( DB::raw("select version() as version") )[0]->version;
-        $accountKey = Auth::check() ? Auth::user()->account->account_key : '';
-
-        $info = "App Version: v" . NINJA_VERSION . "\\n" .
-                "White Label: " . (Utils::isWhiteLabel() ? 'Yes' : 'No') . " - {$accountKey}\\n" .
-                "Server OS: " . php_uname('s') . ' ' . php_uname('r') . "\\n" .
-                "PHP Version: " . phpversion() . "\\n" .
-                "MySQL Version: " . $mysqlVersion;
-
-        session(['DEBUG_INFO' => $info]);
-
-        return $info;
     }
 
     public static function getLocaleRegion()
@@ -359,9 +333,7 @@ class Utils
             if ($field == 'checkbox') {
                 $data[] = $field;
             } elseif ($field) {
-                if (substr($field, 0, 1) == '-') {
-                    $data[] = substr($field, 1);
-                } elseif ($module) {
+                if ($module) {
                     $data[] = mtrans($module, $field);
                 } else {
                     $data[] = trans("texts.$field");
@@ -421,59 +393,25 @@ class Utils
 
     public static function prepareErrorData($context)
     {
-        $data = [
+        return [
             'context' => $context,
             'user_id' => Auth::check() ? Auth::user()->id : 0,
             'account_id' => Auth::check() ? Auth::user()->account_id : 0,
             'user_name' => Auth::check() ? Auth::user()->getDisplayName() : '',
             'method' => Request::method(),
+            'url' => Input::get('url', Request::url()),
+            'previous' => url()->previous(),
             'user_agent' => isset($_SERVER['HTTP_USER_AGENT']) ? $_SERVER['HTTP_USER_AGENT'] : '',
-            'locale' => App::getLocale(),
             'ip' => Request::getClientIp(),
             'count' => Session::get('error_count', 0),
             'is_console' => App::runningInConsole() ? 'yes' : 'no',
             'is_api' => session('token_id') ? 'yes' : 'no',
             'db_server' => config('database.default'),
         ];
-
-        if (static::isNinja()) {
-            $data['url'] = Input::get('url', Request::url());
-            $data['previous'] = url()->previous();
-        } else {
-            $data['url'] = request()->path();
-        }
-
-        return $data;
-    }
-
-    public static function getErrors()
-    {
-        $data = [];
-        $filename = storage_path('logs/laravel-error.log');
-
-        if (! file_exists($filename)) {
-            return $data;
-        }
-
-        $errors = file($filename);
-
-        for ($i=count($errors)-1; $i>=0; $i--) {
-            $data[] = $errors[$i];
-            if (count($data) >= 10) {
-                break;
-            }
-        }
-
-        return $data;
     }
 
     public static function parseFloat($value)
     {
-        // check for comma as decimal separator
-        if (preg_match('/,[\d]{1,2}$/', $value)) {
-            $value = str_replace(',', '.', $value);
-        }
-
         $value = preg_replace('/[^0-9\.\-]/', '', $value);
 
         return floatval($value);
@@ -484,65 +422,6 @@ class Utils
         $value = preg_replace('/[^0-9]/', '', $value);
 
         return intval($value);
-    }
-
-    public static function lookupIdInCache($name, $type)
-    {
-        $cache = Cache::get($type);
-
-        $data = $cache->filter(function ($item) use ($name) {
-            return strtolower($item->name) == trim(strtolower($name));
-        });
-
-        if ($record = $data->first()) {
-            return $record->id;
-        } else {
-            return null;
-        }
-    }
-
-    public static function getStaticData($locale = false)
-    {
-        $data = [];
-
-        $cachedTables = unserialize(CACHED_TABLES);
-        foreach ($cachedTables as $name => $class) {
-            $data[$name] = Cache::get($name);
-        }
-
-        if ($locale) {
-            $data['industries'] = Cache::get('industries')->each(function ($industry) {
-                $industry->name = trans('texts.industry_'.$industry->name);
-            })->sortBy(function ($industry) {
-                return $industry->name;
-            })->values();
-
-            $data['countries'] = Cache::get('countries')->each(function ($country) {
-                $country->name = trans('texts.country_'.$country->name);
-            })->sortBy(function ($country) {
-                return $country->name;
-            })->values();
-
-            $data['paymentTypes'] = Cache::get('paymentTypes')->each(function ($pType) {
-                $pType->name = trans('texts.payment_type_'.$pType->name);
-            })->sortBy(function ($pType) {
-                return $pType->name;
-            })->values();
-
-            $data['languages'] = Cache::get('languages')->each(function ($lang) {
-                $lang->name = trans('texts.lang_'.$lang->name);
-            })->sortBy(function ($lang) {
-                return $lang->name;
-            })->values();
-
-            $data['currencies'] = Cache::get('currencies')->each(function ($currency) {
-                $currency->name = trans('texts.currency_' . \Str::slug($currency->name, '_'));
-            })->sortBy(function ($currency) {
-                return $currency->name;
-            })->values();
-        }
-
-        return $data;
     }
 
     public static function getFromCache($id, $type)
@@ -560,21 +439,6 @@ class Utils
         });
 
         return $data->first();
-    }
-
-    public static function formatNumber($value, $currencyId = false, $precision = 0)
-    {
-        $value = floatval($value);
-
-        if (! $currencyId) {
-            $currencyId = Session::get(SESSION_CURRENCY, DEFAULT_CURRENCY);
-        }
-
-        $currency = self::getFromCache($currencyId, 'currencies');
-        $thousand = $currency->thousand_separator;
-        $decimal = $currency->decimal_separator;
-
-        return number_format($value, $precision, $decimal, $thousand);
     }
 
     public static function formatMoney($value, $currencyId = false, $countryId = false, $decorator = false)
@@ -643,10 +507,6 @@ class Utils
 
         if ($type === ENTITY_EXPENSE_CATEGORY) {
             return 'expense_categories';
-        } elseif ($type === ENTITY_PROPOSAL_CATEGORY) {
-            return 'proposal_categories';
-        } elseif ($type === ENTITY_TASK_STATUS) {
-            return 'task_statuses';
         } else {
             return $type . 's';
         }
@@ -904,7 +764,7 @@ class Utils
             $month += 12;
         }
 
-        return trans('texts.' . $months[$month], [], $locale);
+        return trans('texts.' . $months[$month], [], null, $locale);
     }
 
     private static function getQuarter($offset)
@@ -994,6 +854,32 @@ class Utils
         }
     }
 
+    public static function notifyZapier($subscription, $data)
+    {
+        $curl = curl_init();
+        $jsonEncodedData = json_encode($data);
+
+        $opts = [
+            CURLOPT_URL => $subscription->target_url,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POST => 1,
+            CURLOPT_POSTFIELDS => $jsonEncodedData,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'Content-Length: '.strlen($jsonEncodedData)],
+        ];
+
+        curl_setopt_array($curl, $opts);
+
+        $result = curl_exec($curl);
+        $status = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+        curl_close($curl);
+
+        if ($status == 410) {
+            $subscription->delete();
+        }
+    }
+
     public static function getApiHeaders($count = 0)
     {
         return [
@@ -1030,7 +916,7 @@ class Utils
         $str = '';
 
         if (property_exists($model, 'is_deleted')) {
-            $str = $model->is_deleted ? 'DISABLED ' : '';
+            $str = $model->is_deleted || ($model->deleted_at && $model->deleted_at != '0000-00-00') ? 'DISABLED ' : '';
 
             if ($model->is_deleted) {
                 $str .= 'ENTITY_DELETED ';
@@ -1080,21 +966,13 @@ class Utils
         return $str;
     }
 
-    public static function getSubdomain($url = false)
+    public static function getSubdomain($url)
     {
-        if (! $url) {
-            $url = Request::server('HTTP_HOST');
-        }
-
         $parts = parse_url($url);
         $subdomain = '';
 
-        if (isset($parts['host']) || isset($parts['path'])) {
-            if (isset($parts['host'])) {
-                $host = explode('.', $parts['host']);
-            } else {
-                $host = explode('.', $parts['path']);
-            }
+        if (isset($parts['host'])) {
+            $host = explode('.', $parts['host']);
             if (count($host) > 2) {
                 $subdomain = $host[0];
             }
@@ -1144,7 +1022,7 @@ class Utils
     {
         $name = trim($name);
         $lastName = (strpos($name, ' ') === false) ? '' : preg_replace('#.*\s([\w-]*)$#', '$1', $name);
-        $firstName = trim(preg_replace('#' . preg_quote($lastName, '/') . '#', '', $name));
+        $firstName = trim(preg_replace('#'.$lastName.'#', '', $name));
 
         return [$firstName, $lastName];
     }
@@ -1174,34 +1052,20 @@ class Utils
         }
     }
 
-    public static function getCustomLabel($value)
+    public static function formatWebsite($website)
     {
-        if (strpos($value, '|') !== false) {
-            return explode('|', $value)[0];
-        } else {
-            return $value;
-        }
-    }
-
-    public static function getCustomValues($value)
-    {
-        if (strpos($value, '|') !== false) {
-            $values = explode(',', explode('|', $value)[1]);
-            return array_combine($values, $values);
-        } else {
-            return $value;
-        }
-    }
-
-    public static function formatWebsite($link)
-    {
-        if (! $link) {
+        if (! $website) {
             return '';
         }
 
-        $title = $link;
-        if (substr($link, 0, 4) != 'http') {
-            $link = 'http://' . $link;
+        $link = $website;
+        $title = $website;
+        $prefix = 'http://';
+
+        if (strlen($link) > 7 && substr($link, 0, 7) === $prefix) {
+            $title = substr($title, 7);
+        } else {
+            $link = $prefix.$link;
         }
 
         return link_to($link, $title, ['target' => '_blank']);
@@ -1324,7 +1188,6 @@ class Utils
             'tasks',
             'expenses',
             'vendors',
-            'proposals',
         ];
 
         if ($path == 'dashboard') {
@@ -1367,19 +1230,7 @@ class Utils
         $tax1 = round($amount * $taxRate1 / 100, 2);
         $tax2 = round($amount * $taxRate2 / 100, 2);
 
-        return round($tax1 + $tax2, 2);
-    }
-
-    public static function roundSignificant($value, $precision = 2) {
-        if (round($value, 3) != $value) {
-            $precision = 4;
-        } elseif (round($value, 2) != $value) {
-            $precision = 3;
-        } elseif (round($value, 1) != $value) {
-            $precision = 2;
-        }
-
-        return number_format($value, $precision, '.', '');
+        return round($amount + $tax1 + $tax2, 2);
     }
 
     public static function truncateString($string, $length)
@@ -1394,91 +1245,5 @@ class Utils
        $contents = fread($handle, 32);
        fclose($handle);
        return( ord($contents[28]) != 0 );
-    }
-
-    //Source: https://stackoverflow.com/questions/3302857/algorithm-to-get-the-excel-like-column-name-of-a-number
-    public static function num2alpha($n)
-    {
-        for($r = ""; $n >= 0; $n = intval($n / 26) - 1)
-            $r = chr($n%26 + 0x41) . $r;
-        return $r;
-    }
-
-    public static function brewerColor($number) {
-        $colors = [
-            '#0B629E',
-            '#43365B',
-            '#63A188',
-            '#F7BF6C',
-            '#D35746',
-            '#6CB4DD',
-            '#034C78',
-            '#30253E',
-            '#394648',
-            '#F89941',
-            '#F48568',
-            '#3495C6',
-        ];
-        $number = ($number-1) % count($colors);
-
-        return $colors[$number];
-    }
-
-    public static function brewerColorRGB($number) {
-        $color = static::brewerColor($number);
-        list($r, $g, $b) = sscanf($color, "#%02x%02x%02x");
-        return "{$r},{$g},{$b}";
-    }
-
-    /**
-     * Replace language-specific characters by ASCII-equivalents.
-     * @param string $s
-     * @return string
-     * Source: https://stackoverflow.com/questions/3371697/replacing-accented-characters-php/16427125#16427125
-     */
-    public static function normalizeChars($s) {
-        $replace = array(
-            'ъ'=>'-', 'Ь'=>'-', 'Ъ'=>'-', 'ь'=>'-',
-            'Ă'=>'A', 'Ą'=>'A', 'À'=>'A', 'Ã'=>'A', 'Á'=>'A', 'Æ'=>'A', 'Â'=>'A', 'Å'=>'A', 'Ä'=>'Ae',
-            'Þ'=>'B',
-            'Ć'=>'C', 'ץ'=>'C', 'Ç'=>'C',
-            'È'=>'E', 'Ę'=>'E', 'É'=>'E', 'Ë'=>'E', 'Ê'=>'E',
-            'Ğ'=>'G',
-            'İ'=>'I', 'Ï'=>'I', 'Î'=>'I', 'Í'=>'I', 'Ì'=>'I',
-            'Ł'=>'L',
-            'Ñ'=>'N', 'Ń'=>'N',
-            'Ø'=>'O', 'Ó'=>'O', 'Ò'=>'O', 'Ô'=>'O', 'Õ'=>'O', 'Ö'=>'Oe',
-            'Ş'=>'S', 'Ś'=>'S', 'Ș'=>'S', 'Š'=>'S',
-            'Ț'=>'T',
-            'Ù'=>'U', 'Û'=>'U', 'Ú'=>'U', 'Ü'=>'Ue',
-            'Ý'=>'Y',
-            'Ź'=>'Z', 'Ž'=>'Z', 'Ż'=>'Z',
-            'â'=>'a', 'ǎ'=>'a', 'ą'=>'a', 'á'=>'a', 'ă'=>'a', 'ã'=>'a', 'Ǎ'=>'a', 'а'=>'a', 'А'=>'a', 'å'=>'a', 'à'=>'a', 'א'=>'a', 'Ǻ'=>'a', 'Ā'=>'a', 'ǻ'=>'a', 'ā'=>'a', 'ä'=>'ae', 'æ'=>'ae', 'Ǽ'=>'ae', 'ǽ'=>'ae',
-            'б'=>'b', 'ב'=>'b', 'Б'=>'b', 'þ'=>'b',
-            'ĉ'=>'c', 'Ĉ'=>'c', 'Ċ'=>'c', 'ć'=>'c', 'ç'=>'c', 'ц'=>'c', 'צ'=>'c', 'ċ'=>'c', 'Ц'=>'c', 'Č'=>'c', 'č'=>'c', 'Ч'=>'ch', 'ч'=>'ch',
-            'ד'=>'d', 'ď'=>'d', 'Đ'=>'d', 'Ď'=>'d', 'đ'=>'d', 'д'=>'d', 'Д'=>'D', 'ð'=>'d',
-            'є'=>'e', 'ע'=>'e', 'е'=>'e', 'Е'=>'e', 'Ə'=>'e', 'ę'=>'e', 'ĕ'=>'e', 'ē'=>'e', 'Ē'=>'e', 'Ė'=>'e', 'ė'=>'e', 'ě'=>'e', 'Ě'=>'e', 'Є'=>'e', 'Ĕ'=>'e', 'ê'=>'e', 'ə'=>'e', 'è'=>'e', 'ë'=>'e', 'é'=>'e',
-            'ф'=>'f', 'ƒ'=>'f', 'Ф'=>'f',
-            'ġ'=>'g', 'Ģ'=>'g', 'Ġ'=>'g', 'Ĝ'=>'g', 'Г'=>'g', 'г'=>'g', 'ĝ'=>'g', 'ğ'=>'g', 'ג'=>'g', 'Ґ'=>'g', 'ґ'=>'g', 'ģ'=>'g',
-            'ח'=>'h', 'ħ'=>'h', 'Х'=>'h', 'Ħ'=>'h', 'Ĥ'=>'h', 'ĥ'=>'h', 'х'=>'h', 'ה'=>'h',
-            'î'=>'i', 'ï'=>'i', 'í'=>'i', 'ì'=>'i', 'į'=>'i', 'ĭ'=>'i', 'ı'=>'i', 'Ĭ'=>'i', 'И'=>'i', 'ĩ'=>'i', 'ǐ'=>'i', 'Ĩ'=>'i', 'Ǐ'=>'i', 'и'=>'i', 'Į'=>'i', 'י'=>'i', 'Ї'=>'i', 'Ī'=>'i', 'І'=>'i', 'ї'=>'i', 'і'=>'i', 'ī'=>'i', 'ĳ'=>'ij', 'Ĳ'=>'ij',
-            'й'=>'j', 'Й'=>'j', 'Ĵ'=>'j', 'ĵ'=>'j', 'я'=>'ja', 'Я'=>'ja', 'Э'=>'je', 'э'=>'je', 'ё'=>'jo', 'Ё'=>'jo', 'ю'=>'ju', 'Ю'=>'ju',
-            'ĸ'=>'k', 'כ'=>'k', 'Ķ'=>'k', 'К'=>'k', 'к'=>'k', 'ķ'=>'k', 'ך'=>'k',
-            'Ŀ'=>'l', 'ŀ'=>'l', 'Л'=>'l', 'ł'=>'l', 'ļ'=>'l', 'ĺ'=>'l', 'Ĺ'=>'l', 'Ļ'=>'l', 'л'=>'l', 'Ľ'=>'l', 'ľ'=>'l', 'ל'=>'l',
-            'מ'=>'m', 'М'=>'m', 'ם'=>'m', 'м'=>'m',
-            'ñ'=>'n', 'н'=>'n', 'Ņ'=>'n', 'ן'=>'n', 'ŋ'=>'n', 'נ'=>'n', 'Н'=>'n', 'ń'=>'n', 'Ŋ'=>'n', 'ņ'=>'n', 'ŉ'=>'n', 'Ň'=>'n', 'ň'=>'n',
-            'о'=>'o', 'О'=>'o', 'ő'=>'o', 'õ'=>'o', 'ô'=>'o', 'Ő'=>'o', 'ŏ'=>'o', 'Ŏ'=>'o', 'Ō'=>'o', 'ō'=>'o', 'ø'=>'o', 'ǿ'=>'o', 'ǒ'=>'o', 'ò'=>'o', 'Ǿ'=>'o', 'Ǒ'=>'o', 'ơ'=>'o', 'ó'=>'o', 'Ơ'=>'o', 'œ'=>'oe', 'Œ'=>'oe', 'ö'=>'oe',
-            'פ'=>'p', 'ף'=>'p', 'п'=>'p', 'П'=>'p',
-            'ק'=>'q',
-            'ŕ'=>'r', 'ř'=>'r', 'Ř'=>'r', 'ŗ'=>'r', 'Ŗ'=>'r', 'ר'=>'r', 'Ŕ'=>'r', 'Р'=>'r', 'р'=>'r',
-            'ș'=>'s', 'с'=>'s', 'Ŝ'=>'s', 'š'=>'s', 'ś'=>'s', 'ס'=>'s', 'ş'=>'s', 'С'=>'s', 'ŝ'=>'s', 'Щ'=>'sch', 'щ'=>'sch', 'ш'=>'sh', 'Ш'=>'sh', 'ß'=>'ss',
-            'т'=>'t', 'ט'=>'t', 'ŧ'=>'t', 'ת'=>'t', 'ť'=>'t', 'ţ'=>'t', 'Ţ'=>'t', 'Т'=>'t', 'ț'=>'t', 'Ŧ'=>'t', 'Ť'=>'t', '™'=>'tm',
-            'ū'=>'u', 'у'=>'u', 'Ũ'=>'u', 'ũ'=>'u', 'Ư'=>'u', 'ư'=>'u', 'Ū'=>'u', 'Ǔ'=>'u', 'ų'=>'u', 'Ų'=>'u', 'ŭ'=>'u', 'Ŭ'=>'u', 'Ů'=>'u', 'ů'=>'u', 'ű'=>'u', 'Ű'=>'u', 'Ǖ'=>'u', 'ǔ'=>'u', 'Ǜ'=>'u', 'ù'=>'u', 'ú'=>'u', 'û'=>'u', 'У'=>'u', 'ǚ'=>'u', 'ǜ'=>'u', 'Ǚ'=>'u', 'Ǘ'=>'u', 'ǖ'=>'u', 'ǘ'=>'u', 'ü'=>'ue',
-            'в'=>'v', 'ו'=>'v', 'В'=>'v',
-            'ש'=>'w', 'ŵ'=>'w', 'Ŵ'=>'w',
-            'ы'=>'y', 'ŷ'=>'y', 'ý'=>'y', 'ÿ'=>'y', 'Ÿ'=>'y', 'Ŷ'=>'y',
-            'Ы'=>'y', 'ž'=>'z', 'З'=>'z', 'з'=>'z', 'ź'=>'z', 'ז'=>'z', 'ż'=>'z', 'ſ'=>'z', 'Ж'=>'zh', 'ж'=>'zh'
-        );
-        return strtr($s, $replace);
     }
 }

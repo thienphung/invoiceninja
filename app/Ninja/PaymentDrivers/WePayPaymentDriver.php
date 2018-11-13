@@ -7,7 +7,6 @@ use App\Models\PaymentMethod;
 use Exception;
 use Session;
 use Utils;
-use App\Models\PaymentType;
 
 class WePayPaymentDriver extends BasePaymentDriver
 {
@@ -160,7 +159,7 @@ class WePayPaymentDriver extends BasePaymentDriver
             }
         } else {
             $paymentMethod->last4 = $source->last_four;
-            $paymentMethod->payment_type_id = PaymentType::parseCardType($source->credit_card_name);
+            $paymentMethod->payment_type_id = $this->parseCardType($source->credit_card_name);
             $paymentMethod->expiration = $source->expiration_year . '-' . $source->expiration_month . '-01';
             $paymentMethod->source_reference = $source->credit_card_id;
         }
@@ -276,22 +275,16 @@ class WePayPaymentDriver extends BasePaymentDriver
                 throw new Exception('Unknown payment');
             }
 
-            if ($payment->is_deleted || $payment->invoice->is_deleted) {
-                throw new Exception('Payment is deleted');
-            }
-
             $wepay = Utils::setupWePay($accountGateway);
             $checkout = $wepay->request('checkout', [
                 'checkout_id' => intval($objectId),
             ]);
 
-            /*
             if ($checkout->state == 'refunded') {
                 $payment->recordRefund();
             } elseif (! empty($checkout->refund) && ! empty($checkout->refund->amount_refunded) && ($checkout->refund->amount_refunded - $payment->refunded) > 0) {
                 $payment->recordRefund($checkout->refund->amount_refunded - $payment->refunded);
             }
-            */
 
             if ($checkout->state == 'captured') {
                 $payment->markComplete();

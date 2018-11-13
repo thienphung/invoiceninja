@@ -108,11 +108,7 @@ class EntityModel extends Eloquent
 
         $className = get_called_class();
 
-        if (method_exists($className, 'trashed')) {
-            return $className::scope($publicId)->withTrashed()->value('id');
-        } else {
-            return $className::scope($publicId)->value('id');
-        }
+        return $className::scope($publicId)->withTrashed()->value('id');
     }
 
     /**
@@ -159,12 +155,6 @@ class EntityModel extends Eloquent
      */
     public function scopeScope($query, $publicId = false, $accountId = false)
     {
-        // If 'false' is passed as the publicId return nothing rather than everything
-        if (func_num_args() > 1 && ! $publicId && ! $accountId) {
-            $query->where('id', '=', 0);
-            return $query;
-        }
-
         if (! $accountId) {
             $accountId = Auth::user()->account_id;
         }
@@ -179,20 +169,11 @@ class EntityModel extends Eloquent
             }
         }
 
-        if (Auth::check() && method_exists($this, 'getEntityType') && ! Auth::user()->hasPermission('view_' . $this->getEntityType())  && $this->getEntityType() != ENTITY_TAX_RATE && $this->getEntityType() != ENTITY_DOCUMENT) {
+        if (Auth::check() && ! Auth::user()->hasPermission('view_all') && method_exists($this, 'getEntityType') && $this->getEntityType() != ENTITY_TAX_RATE) {
             $query->where(Utils::pluralizeEntityType($this->getEntityType()) . '.user_id', '=', Auth::user()->id);
         }
 
         return $query;
-    }
-
-    public function scopeWithActiveOrSelected($query, $id = false)
-    {
-        return $query->withTrashed()
-                      ->where(function ($query) use ($id) {
-                            $query->whereNull('deleted_at')
-                                  ->orWhere('id', '=', $id);
-                });
     }
 
     /**
@@ -334,14 +315,12 @@ class EntityModel extends Eloquent
             'recurring_expenses' => 'files-o',
             'credits' => 'credit-card',
             'quotes' => 'file-text-o',
-            'proposals' => 'th-large',
             'tasks' => 'clock-o',
             'expenses' => 'file-image-o',
             'vendors' => 'building',
             'settings' => 'cog',
             'self-update' => 'download',
             'reports' => 'th-list',
-            'projects' => 'briefcase',
         ];
 
         return array_get($icons, $entityType);
@@ -366,15 +345,6 @@ class EntityModel extends Eloquent
         }
 
         return false;
-    }
-
-    public static function getFormUrl($entityType)
-    {
-        if (in_array($entityType, [ENTITY_PROPOSAL_CATEGORY, ENTITY_PROPOSAL_SNIPPET, ENTITY_PROPOSAL_TEMPLATE])) {
-            return str_replace('_', 's/', Utils::pluralizeEntityType($entityType));
-        } else {
-            return Utils::pluralizeEntityType($entityType);
-        }
     }
 
     public static function getStates($entityType = false)
@@ -439,35 +409,5 @@ class EntityModel extends Eloquent
             }
             throw $exception;
         }
-    }
-
-    public function equalTo($obj)
-    {
-        if (empty($obj->id)) {
-            return false;
-        }
-
-        return $this->id == $obj->id && $this->getEntityType() == $obj->entityType;
-    }
-
-    /**
-      * @param $method
-      * @param $params
-      */
-    public function __call($method, $params)
-    {
-        if (count(config('modules.relations'))) {
-            $entityType = $this->getEntityType();
-
-            if ($entityType) {
-                $config = implode('.', ['modules.relations.' . $entityType, $method]);
-                if (config()->has($config)) {
-                    $function = config()->get($config);
-                    return $function($this);
-                }
-            }
-        }
-
-        return parent::__call($method, $params);
     }
 }

@@ -165,7 +165,7 @@ class BankAccountService extends BaseService
         }
 
         // if we can't find a match skip the account
-        if ($bankAccounts->count() && ! $obj->account_name) {
+        if (count($bankAccounts) && ! $obj->account_name) {
             return false;
         }
 

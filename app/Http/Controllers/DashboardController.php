@@ -25,7 +25,7 @@ class DashboardController extends BaseController
     public function index()
     {
         $user = Auth::user();
-        $viewAll = $user->hasPermission('view_reports');
+        $viewAll = $user->hasPermission('view_all');
         $userId = $user->id;
         $account = $user->account;
         $accountId = $account->id;
@@ -42,14 +42,10 @@ class DashboardController extends BaseController
         $expenses = $dashboardRepo->expenses($account, $userId, $viewAll);
         $tasks = $dashboardRepo->tasks($accountId, $userId, $viewAll);
 
-        $showBlueVinePromo = false;
-        if ($user->is_admin && env('BLUEVINE_PARTNER_UNIQUE_ID')) {
-            $showBlueVinePromo = ! $account->company->bluevine_status
-                && $account->created_at <= date('Y-m-d', strtotime('-1 month'));
-            if (request()->bluevine) {
-                $showBlueVinePromo = true;
-            }
-        }
+        $showBlueVinePromo = $user->is_admin
+            && env('BLUEVINE_PARTNER_UNIQUE_ID')
+            && ! $account->company->bluevine_status
+            && $account->created_at <= date('Y-m-d', strtotime('-1 month'));
 
         $showWhiteLabelExpired = Utils::isSelfHost() && $account->company->hasExpiredPlan(PLAN_WHITE_LABEL);
 
@@ -83,7 +79,6 @@ class DashboardController extends BaseController
             'tasks' => $tasks,
             'showBlueVinePromo' => $showBlueVinePromo,
             'showWhiteLabelExpired' => $showWhiteLabelExpired,
-            'showExpenses' => $expenses->count() && $account->isModuleEnabled(ENTITY_EXPENSE),
             'headerClass' => in_array(\App::getLocale(), ['lt', 'pl', 'cs', 'sl', 'tr_TR']) ? 'in-large' : 'in-thin',
             'footerClass' => in_array(\App::getLocale(), ['lt', 'pl', 'cs', 'sl', 'tr_TR']) ? '' : 'in-thin',
         ];

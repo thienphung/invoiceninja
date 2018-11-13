@@ -2,12 +2,9 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\Account;
 use App\Models\Contact;
 use App\Models\Invitation;
-use App\Models\ProposalInvitation;
 use Auth;
-use Utils;
 use Closure;
 use Session;
 
@@ -28,14 +25,13 @@ class Authenticate
     public function handle($request, Closure $next, $guard = 'user')
     {
         $authenticated = Auth::guard($guard)->check();
-        $invitationKey = $request->invitation_key ?: $request->proposal_invitation_key;
 
         if ($guard == 'client') {
-            if (! empty($request->invitation_key) || ! empty($request->proposal_invitation_key)) {
+            if (! empty($request->invitation_key)) {
                 $contact_key = session('contact_key');
                 if ($contact_key) {
                     $contact = $this->getContact($contact_key);
-                    $invitation = $this->getInvitation($invitationKey, ! empty($request->proposal_invitation_key));
+                    $invitation = $this->getInvitation($request->invitation_key);
 
                     if (! $invitation) {
                         return response()->view('error', [
@@ -63,17 +59,16 @@ class Authenticate
             $contact = false;
             if ($contact_key) {
                 $contact = $this->getContact($contact_key);
-            } elseif ($invitation = $this->getInvitation($invitationKey, ! empty($request->proposal_invitation_key))) {
+            } elseif ($invitation = $this->getInvitation($request->invitation_key)) {
                 $contact = $invitation->contact;
                 Session::put('contact_key', $contact->contact_key);
             }
             if (! $contact) {
-                return \Redirect::to('client/session_expired');
+                return \Redirect::to('client/sessionexpired');
             }
-
             $account = $contact->account;
 
-            if (Auth::guard('user')->check() && Auth::user('user')->account_id == $account->id) {
+            if (Auth::guard('user')->check() && Auth::user('user')->account_id === $account->id) {
                 // This is an admin; let them pretend to be a client
                 $authenticated = true;
             }
@@ -91,9 +86,8 @@ class Authenticate
                 $authenticated = true;
             }
 
-            if ($authenticated) {
-                $request->merge(['contact' => $contact]);
-                $account->loadLocalizationSettings($contact->client);
+            if (env('PHANTOMJS_SECRET') && $request->phantomjs_secret && hash_equals(env('PHANTOMJS_SECRET'), $request->phantomjs_secret)) {
+                $authenticated = true;
             }
         }
 
@@ -101,21 +95,7 @@ class Authenticate
             if ($request->ajax()) {
                 return response('Unauthorized.', 401);
             } else {
-                if ($guard == 'client') {
-                    $url = '/client/login';
-                    if (Utils::isNinjaProd()) {
-                        if ($account && Utils::getSubdomain() == 'app') {
-                            $url .= '?account_key=' . $account->account_key;
-                        }
-                    } else {
-                        if ($account && Account::count() > 1) {
-                            $url .= '?account_key=' . $account->account_key;
-                        }
-                    }
-                } else {
-                    $url = '/login';
-                }
-                return redirect()->guest($url);
+                return redirect()->guest($guard == 'client' ? '/client/login' : '/login');
             }
         }
 
@@ -127,7 +107,7 @@ class Authenticate
      *
      * @return \Illuminate\Database\Eloquent\Model|null|static
      */
-    protected function getInvitation($key, $isProposal = false)
+    protected function getInvitation($key)
     {
         if (! $key) {
             return false;
@@ -137,12 +117,7 @@ class Authenticate
         list($key) = explode('&', $key);
         $key = substr($key, 0, RANDOM_KEY_LENGTH);
 
-        if ($isProposal) {
-            $invitation = ProposalInvitation::withTrashed()->where('invitation_key', '=', $key)->first();
-        } else {
-            $invitation = Invitation::withTrashed()->where('invitation_key', '=', $key)->first();
-        }
-
+        $invitation = Invitation::withTrashed()->where('invitation_key', '=', $key)->first();
         if ($invitation && ! $invitation->is_deleted) {
             return $invitation;
         } else {

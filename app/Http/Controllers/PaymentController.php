@@ -89,29 +89,16 @@ class PaymentController extends BaseController
      */
     public function create(PaymentRequest $request)
     {
-        $user = auth()->user();
-        $account = $user->account;
-
         $invoices = Invoice::scope()
                     ->invoices()
-                    ->where('invoices.invoice_status_id', '!=', INVOICE_STATUS_PAID)
+                    ->where('invoices.balance', '!=', 0)
                     ->with('client', 'invoice_status')
                     ->orderBy('invoice_number')->get();
 
-        $clientPublicId = Input::old('client') ? Input::old('client') : ($request->client_id ?: 0);
-        $invoicePublicId = Input::old('invoice') ? Input::old('invoice') : ($request->invoice_id ?: 0);
-
-        $totalCredit = false;
-        if ($clientPublicId && $client = Client::scope($clientPublicId)->first()) {
-            $totalCredit = $account->formatMoney($client->getTotalCredit(), $client);
-        } elseif ($invoicePublicId && $invoice = Invoice::scope($invoicePublicId)->first()) {
-            $totalCredit = $account->formatMoney($invoice->client->getTotalCredit(), $client);
-        }
-
         $data = [
             'account' => Auth::user()->account,
-            'clientPublicId' => $clientPublicId,
-            'invoicePublicId' => $invoicePublicId,
+            'clientPublicId' => Input::old('client') ? Input::old('client') : ($request->client_id ?: 0),
+            'invoicePublicId' => Input::old('invoice') ? Input::old('invoice') : ($request->invoice_id ?: 0),
             'invoice' => null,
             'invoices' => $invoices,
             'payment' => null,
@@ -119,9 +106,7 @@ class PaymentController extends BaseController
             'url' => 'payments',
             'title' => trans('texts.new_payment'),
             'paymentTypeId' => Input::get('paymentTypeId'),
-            'clients' => Client::scope()->with('contacts')->orderBy('name')->get(),
-            'totalCredit' => $totalCredit,
-        ];
+            'clients' => Client::scope()->with('contacts')->orderBy('name')->get(), ];
 
         return View::make('payments.edit', $data);
     }
@@ -206,10 +191,16 @@ class PaymentController extends BaseController
 
         // if the payment amount is more than the balance create a credit
         if ($amount > $request->invoice->balance) {
-            $credit = true;
+            $credit = Credit::createNew();
+            $credit->client_id = $request->invoice->client_id;
+            $credit->credit_date = date_create()->format('Y-m-d');
+            $credit->amount = $credit->balance = $amount - $request->invoice->balance;
+            $credit->private_notes = trans('texts.credit_created_by', ['transaction_reference' => $input['transaction_reference']]);
+            $credit->save();
+            $input['amount'] = $request->invoice->balance;
         }
 
-        $payment = $this->paymentService->save($input, null, $request->invoice);
+        $payment = $this->paymentService->save($input);
 
         if (Input::get('email_receipt')) {
             $this->contactMailer->sendPaymentConfirmation($payment);
@@ -218,7 +209,7 @@ class PaymentController extends BaseController
             Session::flash('message', trans($credit ? 'texts.created_payment_and_credit' : 'texts.created_payment'));
         }
 
-        return url($payment->client->getRoute());
+        return redirect()->to($payment->client->getRoute() . '#payments');
     }
 
     /**
@@ -245,17 +236,15 @@ class PaymentController extends BaseController
     public function bulk()
     {
         $action = Input::get('action');
+        $amount = Input::get('refund_amount');
         $ids = Input::get('public_id') ? Input::get('public_id') : Input::get('ids');
 
         if ($action === 'email') {
-            $payment = Payment::scope($ids)->withArchived()->first();
+            $payment = Payment::scope($ids)->first();
             $this->contactMailer->sendPaymentConfirmation($payment);
             Session::flash('message', trans('texts.emailed_payment'));
         } else {
-            $count = $this->paymentService->bulk($ids, $action, [
-                'refund_amount' => Input::get('refund_amount'),
-                'refund_email' => Input::get('refund_email'),
-            ]);
+            $count = $this->paymentService->bulk($ids, $action, ['refund_amount' => $amount]);
             if ($count > 0) {
                 $message = Utils::pluralize($action == 'refund' ? 'refunded_payment' : $action.'d_payment', $count);
                 Session::flash('message', $message);

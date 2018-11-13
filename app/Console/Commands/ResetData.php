@@ -23,7 +23,7 @@ class ResetData extends Command
 
     public function fire()
     {
-        $this->info(date('r') . ' Running ResetData...');
+        $this->info(date('Y-m-d') . ' Running ResetData...');
 
         if (! Utils::isNinjaDev()) {
             return;

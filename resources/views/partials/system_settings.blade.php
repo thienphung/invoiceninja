@@ -17,7 +17,7 @@
       <div class="panel-body form-padding-right">
         {{--- Former::select('database[default]')->label('driver')->options(['mysql' => 'MySQL', 'pgsql' => 'PostgreSQL', 'sqlite' => 'SQLite'])
                 ->value(isset($_ENV['DB_TYPE']) ? $_ENV['DB_TYPE'] : 'mysql') ---}}
-        {!! Former::plaintext('driver')->value('MySQL') !!}
+        {!! Former::plaintext('Driver')->value('MySQL') !!}
         {!! Former::text('database[type][host]')->label('host')->value(isset($_ENV['DB_HOST']) ? $_ENV['DB_HOST'] : 'localhost') !!}
         {!! Former::text('database[type][database]')->label('database')->value(isset($_ENV['DB_DATABASE']) ? $_ENV['DB_DATABASE'] : 'ninja') !!}
         {!! Former::text('database[type][username]')->label('username')->value(isset($_ENV['DB_USERNAME']) ? $_ENV['DB_USERNAME'] : 'ninja') !!}
@@ -33,23 +33,23 @@
           </div>
           <div class="panel-body form-padding-right">
             {!! Former::select('mail[driver]')->label('driver')->options(['smtp' => 'SMTP', 'mail' => 'Mail', 'sendmail' => 'Sendmail', 'mailgun' => 'Mailgun'])
-                     ->value(HTMLUtils::getEnvForAccount('MAIL_DRIVER', 'smtp'))->setAttributes(['onchange' => 'mailDriverChange()']) !!}
+                     ->value(isset($_ENV['MAIL_DRIVER']) ? $_ENV['MAIL_DRIVER'] : 'smtp')->setAttributes(['onchange' => 'mailDriverChange()']) !!}
             {!! Former::text('mail[from][name]')->label('from_name')
-                     ->value(HTMLUtils::getEnvForAccount('MAIL_FROM_NAME'))  !!}
+                     ->value(isset($_ENV['MAIL_FROM_NAME']) ? $_ENV['MAIL_FROM_NAME'] : '')  !!}
             {!! Former::text('mail[from][address]')->label('from_address')
-                     ->value(HTMLUtils::getEnvForAccount('MAIL_FROM_ADDRESS'))  !!}
+                     ->value(isset($_ENV['MAIL_FROM_ADDRESS']) ? $_ENV['MAIL_FROM_ADDRESS'] : '')  !!}
             {!! Former::text('mail[username]')->label('username')
-                     ->value(HTMLUtils::getEnvForAccount('MAIL_USERNAME'))  !!}
+                     ->value(isset($_ENV['MAIL_USERNAME']) ? $_ENV['MAIL_USERNAME'] : '')  !!}
             <div id="standardMailSetup">
               {!! Former::text('mail[host]')->label('host')
-                      ->value(HTMLUtils::getEnvForAccount('MAIL_HOST')) !!}
+                      ->value(isset($_ENV['MAIL_HOST']) ? $_ENV['MAIL_HOST'] : '') !!}
               {!! Former::text('mail[port]')->label('port')
-                      ->value(HTMLUtils::getEnvForAccount('MAIL_PORT', '587'))  !!}
+                      ->value(isset($_ENV['MAIL_PORT']) ? $_ENV['MAIL_PORT'] : '587')  !!}
               {!! Former::select('mail[encryption]')->label('encryption')
-                      ->options(['tls' => 'TLS', 'ssl' => 'SSL', '' => trans('texts.none')])
-                      ->value(HTMLUtils::getEnvForAccount('MAIL_ENCRYPTION', 'tls'))  !!}
+                      ->options(['tls' => 'TLS', 'ssl' => 'SSL', '' => 'None'])
+                      ->value(isset($_ENV['MAIL_ENCRYPTION']) ? $_ENV['MAIL_ENCRYPTION'] : 'tls')  !!}
               {!! Former::password('mail[password]')->label('password')
-                      ->value(HTMLUtils::getEnvForAccount('MAIL_PASSWORD'))  !!}
+                      ->value(isset($_ENV['MAIL_PASSWORD']) ? $_ENV['MAIL_PASSWORD'] : '')  !!}
             </div>
             <div id="mailgunMailSetup">
               {!! Former::text('mail[mailgun_domain]')->label('mailgun_domain')
@@ -89,7 +89,7 @@
     }
 
     function mailDriverChange() {
-      if ($("select[name='mail[driver]']").val() == 'mailgun') {
+      if ($("select[name='mail[driver]'").val() == 'mailgun') {
         $("#standardMailSetup").hide();
         $("#standardMailSetup").children('select,input').prop('disabled',true);
         $("#mailgunMailSetup").show();

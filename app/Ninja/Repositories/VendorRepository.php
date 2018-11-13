@@ -44,8 +44,7 @@ class VendorRepository extends BaseRepository
                         'vendor_contacts.email',
                         'vendors.deleted_at',
                         'vendors.is_deleted',
-                        'vendors.user_id',
-                        'vendors.private_notes'
+                        'vendors.user_id'
                     );
 
         $this->applyFilters($query, ENTITY_VENDOR);
@@ -68,7 +67,7 @@ class VendorRepository extends BaseRepository
 
         if ($vendor) {
             // do nothing
-        } elseif (! $publicId || intval($publicId) < 0) {
+        } elseif (! $publicId || $publicId == '-1') {
             $vendor = Vendor::createNew();
         } else {
             $vendor = Vendor::scope($publicId)->with('vendor_contacts')->firstOrFail();

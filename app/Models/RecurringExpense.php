@@ -129,7 +129,7 @@ class RecurringExpense extends EntityModel
 
     public function amountWithTax()
     {
-        return $this->amount + Utils::calculateTaxes($this->amount, $this->tax_rate1, $this->tax_rate2);
+        return Utils::calculateTaxes($this->amount, $this->tax_rate1, $this->tax_rate2);
     }
 }
 

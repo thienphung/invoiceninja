@@ -71,7 +71,7 @@ class EnterprisePlan extends Migration
                 $query->whereNull('users.public_id');
                 $query->orWhere('users.public_id', '=', 0);
             })
-            ->pluck('users.account_id');
+            ->lists('users.account_id');
 
         if (count($single_account_ids)) {
             foreach (Account::find($single_account_ids) as $account) {
@@ -207,7 +207,7 @@ class EnterprisePlan extends Migration
                 $query->whereNotNull('companies.plan_paid');
                 $query->orWhereNotNull('companies.trial_started');
             })
-            ->pluck('companies.id');
+            ->lists('companies.id');
 
         $company_ids = array_unique($company_ids);
 

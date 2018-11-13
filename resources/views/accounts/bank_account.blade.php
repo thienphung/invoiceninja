@@ -39,25 +39,32 @@
                             ->data_bind('combobox: bank_id')
                             ->addOption('', '')
                             ->fromQuery($banks, 'name', 'id')
-                            ->blockHelp(trans('texts.bank_accounts_help', ['link' => link_to(OFX_HOME_URL, trans('texts.us_banks'), ['target' => '_blank'])]))  !!}
+                            ->blockHelp(trans('texts.bank_accounts_help', ['link' => OFX_HOME_URL]))  !!}
                 @endif
 
                 <br/>
 
                 {!! Former::password('bank_username')
                         ->data_bind("value: bank_username, valueUpdate: 'afterkeydown'")
-                        ->label(trans('texts.username'))
-                        ->data_lpignore('true') !!}
+                        ->label(trans('texts.username')) !!}
 
                 {!! Former::password('bank_password')
                         ->label(trans('texts.password'))
                         ->data_bind("value: bank_password, valueUpdate: 'afterkeydown'")
-                        ->blockHelp(trans(Request::secure() ? 'texts.bank_password_help' : 'texts.bank_password_warning'))
-                        ->data_lpignore('true') !!}
+                        ->blockHelp(trans(Request::secure() ? 'texts.bank_password_help' : 'texts.bank_password_warning')) !!}
 
                 <br/>
 
                 {!! Former::select('app_version')
+                        ->addOption('Quicken 2005', 1400)
+                        ->addOption('Quicken 2006', 1500)
+                        ->addOption('Quicken 2007', 1600)
+                        ->addOption('Quicken 2008', 1700)
+                        ->addOption('Quicken 2009', 1800)
+                        ->addOption('Quicken 2010', 1900)
+                        ->addOption('Quicken 2011', 2000)
+                        ->addOption('Quicken 2012', 2100)
+                        ->addOption('Quicken 2013', 2200)
                         ->addOption('Quicken 2014', 2300)
                         ->addOption('Quicken 2015', 2400)
                         ->addOption('Quicken 2016', 2500)
@@ -67,11 +74,7 @@
                         ->addOption('100', 100)
                         ->addOption('101', 101)
                         ->addOption('102', 102)
-                        ->addOption('103', 103)
-                        ->help(trans('texts.ofx_help', [
-                            'ofxhome_link' => link_to('http://www.ofxhome.com/index.php/home/directory', 'OFX Home', ['target' => '_blank', 'id' => 'ofxLink']),
-                            'ofxget_link' => link_to('http://www.ofxhome.com/index.php/home/ofxget', 'Ofxget', ['target' => '_blank']),
-                        ])) !!}
+                        ->addOption('103', 103) !!}
 
             </div>
         </div>
@@ -184,40 +187,41 @@
     </div>
     </div>
 
+    <p/>&nbsp;<p/>
+
     @if (Auth::user()->hasFeature(FEATURE_EXPENSES))
-        <center class="buttons">
-            {!! count(Cache::get('banks')) > 0 ?
+        {!! Former::actions(
+            count(Cache::get('banks')) > 0 ?
                 Button::normal(trans('texts.cancel'))
                     ->withAttributes([
                         'data-bind' => 'visible: !importResults()',
                     ])
                     ->large()
                     ->asLinkTo(URL::to('/settings/bank_accounts'))
-                    ->appendIcon(Icon::create('remove-circle')) : false !!}
-            {!! Button::success(trans('texts.validate'))
+                    ->appendIcon(Icon::create('remove-circle')) : false,
+            Button::success(trans('texts.validate'))
                 ->withAttributes([
                     'data-bind' => 'css: {disabled: disableValidate}, visible: page() == "login"',
                     'onclick' => 'validate()'
                 ])
                 ->large()
-                ->appendIcon(Icon::create('lock')) !!}
-            {!! Button::success(trans('texts.save'))
+                ->appendIcon(Icon::create('lock')),
+            Button::success(trans('texts.save'))
                 ->withAttributes([
                     'data-bind' => 'css: {disabled: disableSave}, visible: page() == "setup"',
                     'style' => 'display:none',
                     'onclick' => 'save()'
                 ])
                 ->large()
-                ->appendIcon(Icon::create('floppy-disk')) !!}
-            {!! Button::success(trans('texts.import'))
+                ->appendIcon(Icon::create('floppy-disk'))   ,
+            Button::success(trans('texts.import'))
                 ->withAttributes([
                     'data-bind' => 'css: {disabled: disableSaveExpenses}, visible: page() == "import"',
                     'style' => 'display:none',
                     'onclick' => 'saveExpenses()'
                 ])
                 ->large()
-                ->appendIcon(Icon::create('floppy-disk')) !!}
-        </center>
+                ->appendIcon(Icon::create('floppy-disk'))) !!}
     @endif
 
     {!! Former::close() !!}
@@ -303,27 +307,7 @@
     }
 
     $(function() {
-
-        var banks = {!! $banks || '[]' !!};
-        var bankMap = {};
-
-        for (var i=0; i<banks.length; i++) {
-            var bank = banks[i];
-            bankMap[bank.id] = bank;
-        }
-
-        $('#bank_id')
-            .change(function(event) {
-                var bankId = $(event.currentTarget).val();
-                bankId = bankMap[bankId] ? bankMap[bankId].remote_id : false;
-                if (bankId) {
-                    var link = 'http://www.ofxhome.com/index.php/institution/view/' + bankId;
-                } else {
-                    var link = 'http://www.ofxhome.com/index.php/home/directory';
-                }
-                $('#ofxLink').attr('href', link);
-            })
-            .focus();
+        $('#bank_id').focus();
     });
 
     var TransactionModel = function(data) {

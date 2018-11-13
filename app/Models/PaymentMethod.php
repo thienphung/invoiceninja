@@ -21,25 +21,10 @@ class PaymentMethod extends EntityModel
      * @var array
      */
     protected $dates = ['deleted_at'];
-
     /**
      * @var array
      */
     protected $hidden = ['id'];
-
-    /**
-     * @var array
-     */
-    protected $fillable = [
-        'contact_id',
-        'payment_type_id',
-        'source_reference',
-        'last4',
-        'expiration',
-        'email',
-        'currency_id',
-    ];
-
 
     /**
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -255,8 +240,8 @@ class PaymentMethod extends EntityModel
 
 PaymentMethod::deleting(function ($paymentMethod) {
     $accountGatewayToken = $paymentMethod->account_gateway_token;
-    if ($accountGatewayToken && $accountGatewayToken->default_payment_method_id == $paymentMethod->id) {
-        $newDefault = $accountGatewayToken->payment_methods->first(function ($paymentMethdod) use ($accountGatewayToken) {
+    if ($accountGatewayToken->default_payment_method_id == $paymentMethod->id) {
+        $newDefault = $accountGatewayToken->payment_methods->first(function ($i, $paymentMethdod) use ($accountGatewayToken) {
             return $paymentMethdod->id != $accountGatewayToken->default_payment_method_id;
         });
         $accountGatewayToken->default_payment_method_id = $newDefault ? $newDefault->id : null;

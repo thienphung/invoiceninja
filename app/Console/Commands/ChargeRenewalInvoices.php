@@ -59,7 +59,7 @@ class ChargeRenewalInvoices extends Command
 
     public function fire()
     {
-        $this->info(date('r').' ChargeRenewalInvoices...');
+        $this->info(date('Y-m-d').' ChargeRenewalInvoices...');
 
         if ($database = $this->option('database')) {
             config(['database.default' => $database]);
@@ -73,7 +73,7 @@ class ChargeRenewalInvoices extends Command
                         ->orderBy('id')
                         ->get();
 
-        $this->info($invoices->count() . ' invoices found');
+        $this->info(count($invoices).' invoices found');
 
         foreach ($invoices as $invoice) {
 

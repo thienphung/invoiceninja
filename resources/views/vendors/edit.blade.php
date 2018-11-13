@@ -1,13 +1,8 @@
 @extends('header')
 
+
 @section('onReady')
 	$('input#name').focus();
-@stop
-
-@section('head')
-	@if (config('ninja.google_maps_api_key'))
-		@include('partials.google_geocode')
-	@endif
 @stop
 
 @section('content')
@@ -49,7 +44,6 @@
                         {!! Former::text('website') !!}
 			{!! Former::text('work_phone') !!}
 
-			@include('partials/custom_fields', ['entityType' => ENTITY_VENDOR])
             </div>
             </div>
 
@@ -57,15 +51,13 @@
           <div class="panel-heading">
             <h3 class="panel-title">{!! trans('texts.address') !!}</h3>
           </div>
-            <div class="panel-body" id="billing_address">
+            <div class="panel-body">
 
 			{!! Former::text('address1') !!}
 			{!! Former::text('address2') !!}
 			{!! Former::text('city') !!}
 			{!! Former::text('state') !!}
-
-			{!! Former::text('postal_code')
-					->oninput(config('ninja.google_maps_api_key') ? 'lookupPostalCode()' : '') !!}
+			{!! Former::text('postal_code') !!}
 			{!! Former::select('country_id')->addOption('','')
 				->fromQuery($countries, 'name', 'id') !!}
 
@@ -172,7 +164,7 @@
 			if (self.vendor_contacts().length == 0) return '';
 			var contact = self.vendor_contacts()[0];
 			if (contact.first_name() || contact.last_name()) {
-				return (contact.first_name() || '') + ' ' + (contact.last_name() || '');
+				return contact.first_name() + ' ' + contact.last_name();
 			} else {
 				return contact.email();
 			}
@@ -202,12 +194,12 @@
 
 
 	</script>
-	@if(Auth::user()->canCreateOrEdit(ENTITY_VENDOR))
+
 	<center class="buttons">
     	{!! Button::normal(trans('texts.cancel'))->large()->asLinkTo(URL::to('/vendors/' . ($vendor ? $vendor->public_id : '')))->appendIcon(Icon::create('remove-circle')) !!}
         {!! Button::success(trans('texts.save'))->submit()->large()->appendIcon(Icon::create('floppy-disk')) !!}
 	</center>
-	@endif
+
 	{!! Former::close() !!}
 </div>
 @stop

@@ -19,7 +19,6 @@
             ]) !!}
 
 	{{ Former::populate($account) }}
-	{{ Former::populateField('task_rate', floatval($account->task_rate) ? Utils::roundSignificant($account->task_rate) : '') }}
 
     @include('accounts.nav', ['selected' => ACCOUNT_COMPANY_DETAILS])
 
@@ -36,9 +35,7 @@
                 {!! Former::text('id_number') !!}
                 {!! Former::text('vat_number') !!}
                 {!! Former::text('website') !!}
-				@if (auth()->user()->registered)
-                	{!! Former::text('work_email') !!}
-				@endif
+                {!! Former::text('work_email') !!}
                 {!! Former::text('work_phone') !!}
                 {!! Former::file('logo')->max(2, 'MB')->accept('image')->inlineHelp(trans('texts.logo_help')) !!}
 
@@ -102,11 +99,6 @@
                         ->fromQuery(\App\Models\PaymentTerm::getSelectOptions(), 'name', 'num_days')
                         ->help(trans('texts.payment_terms_help') . ' | ' . link_to('/settings/payment_terms', trans('texts.customize_options'))) !!}
 
-				@if ($account->isModuleEnabled(ENTITY_TASK))
-					{!! Former::text('task_rate')
-					 		->help('task_rate_help')!!}
-				@endif
-
             </div>
         </div>
         </div>
@@ -138,4 +130,8 @@
 
 	</script>
 
+@stop
+
+@section('onReady')
+    $('#name').focus();
 @stop

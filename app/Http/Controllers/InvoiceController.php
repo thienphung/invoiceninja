@@ -93,29 +93,19 @@ class InvoiceController extends BaseController
             ->where('invitations.invoice_id', '=', $invoice->id)
             ->where('invitations.account_id', '=', Auth::user()->account_id)
             ->where('invitations.deleted_at', '=', null)
-            ->select('contacts.public_id')->pluck('public_id');
+            ->select('contacts.public_id')->lists('public_id');
 
         $clients = Client::scope()->withTrashed()->with('contacts', 'country');
 
         if ($clone) {
-            $entityType = $clone == INVOICE_TYPE_STANDARD ? ENTITY_INVOICE : ENTITY_QUOTE;
             $invoice->id = $invoice->public_id = null;
             $invoice->is_public = false;
-            $invoice->is_recurring = $invoice->is_recurring && $clone == INVOICE_TYPE_STANDARD;
-            $invoice->invoice_type_id = $clone;
             $invoice->invoice_number = $account->getNextNumber($invoice);
             $invoice->due_date = null;
-            $invoice->partial_due_date = null;
             $invoice->balance = $invoice->amount;
             $invoice->invoice_status_id = 0;
             $invoice->invoice_date = date_create()->format('Y-m-d');
             $invoice->deleted_at = null;
-            while ($invoice->documents->count()) {
-                $invoice->documents->pop();
-            }
-            while ($invoice->expenses->count()) {
-                $invoice->expenses->pop();
-            }
             $method = 'POST';
             $url = "{$entityType}s";
         } else {
@@ -130,8 +120,6 @@ class InvoiceController extends BaseController
         $invoice->start_date = Utils::fromSqlDate($invoice->start_date);
         $invoice->end_date = Utils::fromSqlDate($invoice->end_date);
         $invoice->last_sent_date = Utils::fromSqlDate($invoice->last_sent_date);
-        $invoice->partial_due_date = Utils::fromSqlDate($invoice->partial_due_date);
-
         $invoice->features = [
             'customize_invoice_design' => Auth::user()->hasFeature(FEATURE_CUSTOMIZE_INVOICE_DESIGN),
             'remove_created_by' => Auth::user()->hasFeature(FEATURE_REMOVE_CREATED_BY),
@@ -140,7 +128,7 @@ class InvoiceController extends BaseController
 
         $lastSent = ($invoice->is_recurring && $invoice->last_sent_date) ? $invoice->recurring_invoices->last() : null;
 
-        if (! Auth::user()->hasPermission('view_client')) {
+        if (! Auth::user()->hasPermission('view_all')) {
             $clients = $clients->where('clients.user_id', '=', Auth::user()->id);
         }
 
@@ -181,7 +169,7 @@ class InvoiceController extends BaseController
                             $contact->email_error = $invitation->email_error;
                             $contact->invitation_link = $invitation->getLink('view', $hasPassword, $hasPassword);
                             $contact->invitation_viewed = $invitation->viewed_date && $invitation->viewed_date != '0000-00-00 00:00:00' ? $invitation->viewed_date : false;
-                            $contact->invitation_opened = $invitation->opened_date && $invitation->opened_date != '0000-00-00 00:00:00' ? $invitation->opened_date : false;
+                            $contact->invitation_openend = $invitation->opened_date && $invitation->opened_date != '0000-00-00 00:00:00' ? $invitation->opened_date : false;
                             $contact->invitation_status = $contact->email_error ? false : $invitation->getStatus();
                             $contact->invitation_signature_svg = $invitation->signatureDiv();
                         }
@@ -211,7 +199,7 @@ class InvoiceController extends BaseController
         $invoice->loadFromRequest();
 
         $clients = Client::scope()->with('contacts', 'country')->orderBy('name');
-        if (! Auth::user()->hasPermission('view_client')) {
+        if (! Auth::user()->hasPermission('view_all')) {
             $clients = $clients->where('clients.user_id', '=', Auth::user()->id);
         }
 
@@ -317,6 +305,7 @@ class InvoiceController extends BaseController
             'account' => Auth::user()->account->load('country'),
             'products' => Product::scope()->orderBy('product_key')->get(),
             'taxRateOptions' => $taxRateOptions,
+            'currencies' => Cache::get('currencies'),
             'sizes' => Cache::get('sizes'),
             'invoiceDesigns' => InvoiceDesign::getDesigns(),
             'invoiceFonts' => Cache::get('fonts'),
@@ -327,7 +316,7 @@ class InvoiceController extends BaseController
             'invoiceLabels' => Auth::user()->account->getInvoiceLabels(),
             'tasks' => Session::get('tasks') ? Session::get('tasks') : null,
             'expenseCurrencyId' => Session::get('expenseCurrencyId') ?: null,
-            'expenses' => Expense::scope(Session::get('expenses'))->with('documents', 'expense_category')->get(),
+            'expenses' => Session::get('expenses') ? Expense::scope(Session::get('expenses'))->with('documents', 'expense_category')->get() : [],
         ];
     }
 
@@ -383,10 +372,8 @@ class InvoiceController extends BaseController
         $message = trans("texts.updated_{$entityType}");
         Session::flash('message', $message);
 
-        if ($action == 'clone_invoice') {
-            return url(sprintf('invoices/%s/clone', $invoice->public_id));
-        } else if ($action == 'clone_quote') {
-            return url(sprintf('quotes/%s/clone', $invoice->public_id));
+        if ($action == 'clone') {
+            return url(sprintf('%ss/%s/clone', $entityType, $invoice->public_id));
         } elseif ($action == 'convert') {
             return $this->convertQuote($request, $invoice->public_id);
         } elseif ($action == 'email') {
@@ -409,11 +396,7 @@ class InvoiceController extends BaseController
         }
 
         if (! Auth::user()->confirmed) {
-            if (Auth::user()->registered) {
-                $errorMessage = trans('texts.confirmation_required', ['link' => link_to('/resend_confirmation', trans('texts.click_here'))]);
-            } else {
-                $errorMessage = trans('texts.registration_required');
-            }
+            $errorMessage = trans(Auth::user()->registered ? 'texts.confirmation_required' : 'texts.registration_required');
             Session::flash('error', $errorMessage);
 
             return Redirect::to('invoices/'.$invoice->public_id.'/edit');
@@ -497,8 +480,6 @@ class InvoiceController extends BaseController
                 $key = 'emailed_' . $entityType;
             } elseif ($action == 'markPaid') {
                 $key = 'created_payment';
-            } elseif ($action == 'download') {
-                $key = 'downloaded_invoice';
             } else {
                 $key = "{$action}d_{$entityType}";
             }
@@ -524,12 +505,7 @@ class InvoiceController extends BaseController
 
     public function cloneInvoice(InvoiceRequest $request, $publicId)
     {
-        return self::edit($request, $publicId, INVOICE_TYPE_STANDARD);
-    }
-
-    public function cloneQuote(InvoiceRequest $request, $publicId)
-    {
-        return self::edit($request, $publicId, INVOICE_TYPE_QUOTE);
+        return self::edit($request, $publicId, true);
     }
 
     public function invoiceHistory(InvoiceRequest $request)
@@ -598,34 +574,6 @@ class InvoiceController extends BaseController
         ];
 
         return View::make('invoices.history', $data);
-    }
-
-    public function deliveryNote(InvoiceRequest $request)
-    {
-        $invoice = $request->entity();
-        $invoice->load('user', 'invoice_items', 'documents', 'expenses', 'expenses.documents', 'account.country', 'client.contacts', 'client.country', 'client.shipping_country');
-        $invoice->invoice_date = Utils::fromSqlDate($invoice->invoice_date);
-        $invoice->due_date = Utils::fromSqlDate($invoice->due_date);
-        $invoice->features = [
-            'customize_invoice_design' => Auth::user()->hasFeature(FEATURE_CUSTOMIZE_INVOICE_DESIGN),
-            'remove_created_by' => Auth::user()->hasFeature(FEATURE_REMOVE_CREATED_BY),
-            'invoice_settings' => Auth::user()->hasFeature(FEATURE_INVOICE_SETTINGS),
-        ];
-        $invoice->invoice_type_id = intval($invoice->invoice_type_id);
-
-        if ($invoice->client->shipping_address1) {
-            foreach (['address1', 'address2', 'city', 'state', 'postal_code', 'country_id'] as $field) {
-                $invoice->client->$field = $invoice->client->{'shipping_' . $field};
-            }
-        }
-
-        $data = [
-            'invoice' => $invoice,
-            'invoiceDesigns' => InvoiceDesign::getDesigns(),
-            'invoiceFonts' => Cache::get('fonts'),
-        ];
-
-        return View::make('invoices.delivery_note', $data);
     }
 
     public function checkInvoiceNumber($invoicePublicId = false)

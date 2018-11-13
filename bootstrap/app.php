@@ -58,12 +58,11 @@ if (strstr($_SERVER['HTTP_USER_AGENT'], 'PhantomJS') && Utils::isNinjaDev()) {
 }
 */
 
+// Write info messages to a separate file
 $app->configureMonologUsing(function($monolog) {
-	if (config('app.log') == 'single') {
-	    $monolog->pushHandler(new Monolog\Handler\StreamHandler(storage_path() . '/logs/laravel-info.log', Monolog\Logger::INFO, false));
-	    $monolog->pushHandler(new Monolog\Handler\StreamHandler(storage_path() . '/logs/laravel-warning.log', Monolog\Logger::WARNING, false));
-	    $monolog->pushHandler(new Monolog\Handler\StreamHandler(storage_path() . '/logs/laravel-error.log', Monolog\Logger::ERROR, false));
-	}
+    $monolog->pushHandler(new Monolog\Handler\StreamHandler(storage_path() . '/logs/laravel-info.log', Monolog\Logger::INFO, false));
+    $monolog->pushHandler(new Monolog\Handler\StreamHandler(storage_path() . '/logs/laravel-warning.log', Monolog\Logger::WARNING, false));
+    $monolog->pushHandler(new Monolog\Handler\StreamHandler(storage_path() . '/logs/laravel-error.log', Monolog\Logger::ERROR, false));
 });
 
 // Capture real IP if using cloudflare

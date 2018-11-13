@@ -23,14 +23,6 @@
         table.table thead .sorting_asc_disabled:after { content: '' !important }
         table.table thead .sorting_desc_disabled:after { content: '' !important }
 
-		@for ($i = 0; $i < count($columns); $i++)
-			table.dataTable td:nth-child({{ $i + 1 }}) {
-				@if ($columns[$i] == trans('texts.status'))
-					text-align: center;
-				@endif
-			}
-		@endfor
-
 	</style>
 
 	<div class="container" id="main-container">
@@ -48,14 +40,12 @@
                 {!! Button::primary(trans("texts.recurring_invoices"))->asLinkTo(URL::to('/client/invoices/recurring')) !!}
             </div>
         @endif
-
         <h3>{{ $title }}</h3>
 
 		{!! Datatable::table()
 	    	->addColumn($columns)
 	    	->setUrl(route('api.client.' . $entityType . 's'))
 	    	->setOptions('sPaginationType', 'bootstrap')
-			->setOptions('aaSorting', [[$sortColumn, 'desc']])
 	    	->render('datatable') !!}
 	</div>
 

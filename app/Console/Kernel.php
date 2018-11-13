@@ -29,7 +29,6 @@ class Kernel extends ConsoleKernel
         'App\Console\Commands\MakeClass',
         'App\Console\Commands\InitLookup',
         'App\Console\Commands\CalculatePayouts',
-        'App\Console\Commands\UpdateKey',
     ];
 
     /**
@@ -51,6 +50,18 @@ class Kernel extends ConsoleKernel
 
         $schedule
             ->command('ninja:send-reminders --force')
+            ->sendOutputTo($logFile)
+            ->daily();
+
+        if (Utils::isNinja()) {
+            $schedule
+                ->command('ninja:send-renewals --force')
+                ->sendOutputTo($logFile)
+                ->daily();
+        }
+
+        $schedule
+            ->command('updater:check-for-update --prefixVersionWith=v')
             ->sendOutputTo($logFile)
             ->daily();
     }
